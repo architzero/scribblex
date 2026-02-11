@@ -10,11 +10,51 @@ datasource db {
 model User {
   id          String   @id @default(uuid())
   email       String   @unique
-  googleId    String   @unique
-  name        String
+  googleId    String?  @unique
+  name        String?
   avatarUrl   String?
   isVerified  Boolean  @default(false)
+
   otpCode     String?
   otpExpiry   DateTime?
+
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roomsOwned  Room[]   @relation("RoomOwner")
+  memberships RoomMember[]
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  name      String
+  isPublic  Boolean  @default(true)
+
+  ownerId   String
+  owner     User     @relation("RoomOwner", fields: [ownerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   RoomMember[]
+}
+
+
+model RoomMember {
+  id       String @id @default(uuid())
+
+  userId   String
+  roomId   String
+
+  role     Role   @default(MEMBER)
+
+  user     User   @relation(fields: [userId], references: [id])
+  room     Room   @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId])
+}
+
+enum Role {
+  OWNER
+  MEMBER
 }

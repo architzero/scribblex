@@ -3,23 +3,41 @@ import dotenv from "dotenv";
 import prisma from "./prisma";
 import oauthPlugin from "@fastify/oauth2";
 import axios from "axios";
+import nodemailer from "nodemailer";
 import jwt from "jsonwebtoken";
-import { sendOTPEmail } from "./email";
-import cookie from "@fastify/cookie";
+import websocket from "@fastify/websocket";
+
 
 dotenv.config();
 
 const server = Fastify({ logger: true });
+server.register(websocket);
 
-/* ===============================
-   REGISTER COOKIE SUPPORT
-================================= */
 
-server.register(cookie);
+/* ============================
+   JWT AUTH MIDDLEWARE
+============================ */
 
-/* ===============================
+async function authenticate(request: any, reply: any) {
+  try {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader) {
+      return reply.status(401).send({ message: "Not authenticated" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+
+    request.user = decoded;
+  } catch (err) {
+    return reply.status(401).send({ message: "Invalid token" });
+  }
+}
+
+/* ============================
    GOOGLE OAUTH
-================================= */
+============================ */
 
 server.register(oauthPlugin, {
   name: "googleOAuth2",
@@ -35,32 +53,21 @@ server.register(oauthPlugin, {
   callbackUri: "http://localhost:4000/auth/google/callback",
 });
 
-/* ===============================
-   AUTH MIDDLEWARE
-================================= */
+/* ============================
+   EMAIL (OTP)
+============================ */
 
-const authenticate = async (request: any, reply: any) => {
-  try {
-    const token = request.cookies.token;
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
-    if (!token) {
-      return reply.status(401).send({ message: "Not authenticated" });
-    }
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    );
-
-    request.user = decoded;
-  } catch (err) {
-    return reply.status(401).send({ message: "Invalid token" });
-  }
-};
-
-/* ===============================
+/* ============================
    BASIC ROUTES
-================================= */
+============================ */
 
 server.get("/health", async () => {
   return { status: "ok" };
@@ -73,9 +80,9 @@ server.get("/protected", { preHandler: authenticate }, async (request: any) => {
   };
 });
 
-/* ===============================
+/* ============================
    GOOGLE CALLBACK
-================================= */
+============================ */
 
 server.get("/auth/google/callback", async function (request, reply) {
   try {
@@ -99,7 +106,7 @@ server.get("/auth/google/callback", async function (request, reply) {
 
     if (!email.endsWith("@gmail.com")) {
       return reply.status(403).send({
-        message: "Only Gmail accounts are allowed.",
+        message: "Only Gmail accounts allowed",
       });
     }
 
@@ -114,105 +121,227 @@ server.get("/auth/google/callback", async function (request, reply) {
           googleId,
           name,
           avatarUrl: picture,
-          isVerified: false,
         },
       });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
     await prisma.user.update({
       where: { email },
       data: {
         otpCode: otp,
-        otpExpiry,
+        otpExpiry: new Date(Date.now() + 5 * 60 * 1000),
       },
     });
 
-    await sendOTPEmail(email, otp);
-
-    return reply.send({
-      message: "OTP sent to your email.",
-      email,
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Your ScribbleX OTP",
+      text: `Your OTP is ${otp}`,
     });
-  } catch (error) {
-    console.error(error);
-    return reply.status(500).send({ message: "OAuth failed" });
+
+    return reply.redirect(
+  `http://localhost:5173/auth/callback?email=${user.email}`
+);
+  } catch (err) {
+    console.error(err);
+    return reply.status(500).send({
+      message: "OAuth failed",
+    });
   }
 });
 
-/* ===============================
-   OTP VERIFY
-================================= */
+/* ============================
+   VERIFY OTP
+============================ */
 
-server.post("/auth/verify-otp", async (request, reply) => {
-  try {
-    const { email, otp } = request.body as {
-      email: string;
-      otp: string;
-    };
+server.post("/auth/verify-otp", async (request: any, reply) => {
+  const { email, otp } = request.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
 
-    if (!user || !user.otpCode || !user.otpExpiry) {
-      return reply.status(400).send({ message: "Invalid request" });
+  const otpString = String(otp).trim(); // 🔥 FIX
+
+  if (
+    !user ||
+    user.otpCode !== otpString ||
+    !user.otpExpiry ||
+    user.otpExpiry < new Date()
+  ) {
+    return reply.status(400).send({ message: "Invalid or expired OTP" });
+  }
+
+  await prisma.user.update({
+    where: { email },
+    data: {
+      isVerified: true,
+      otpCode: null,
+      otpExpiry: null,
+    },
+  });
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      email: user.email,
+    },
+    process.env.JWT_SECRET as string,
+    { expiresIn: "1h" }
+  );
+
+  return reply.send({
+    message: "Login successful",
+    token,
+  });
+});
+
+/* ============================
+   CREATE ROOM
+============================ */
+
+server.post(
+  "/rooms",
+  { preHandler: authenticate },
+  async (request: any, reply) => {
+    const { name, isPublic } = request.body;
+    const userId = request.user.userId;
+
+    if (!name) {
+      return reply.status(400).send({ message: "Room name required" });
     }
 
-    if (user.otpCode !== otp) {
-      return reply.status(401).send({ message: "Invalid OTP" });
-    }
-
-    if (new Date() > user.otpExpiry) {
-      return reply.status(401).send({ message: "OTP expired" });
-    }
-
-    await prisma.user.update({
-      where: { email },
+    const room = await prisma.room.create({
       data: {
-        isVerified: true,
-        otpCode: null,
-        otpExpiry: null,
+        name,
+        isPublic: isPublic ?? true,
+
+        owner: {
+          connect: { id: userId },
+        },
+
+        members: {
+          create: {
+            userId: userId,
+            role: "OWNER",
+          },
+        },
       },
     });
 
-    const authToken = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "1h" }
-    );
-
-    reply.setCookie("token", authToken, {
-      httpOnly: true,
-      secure: false, // true in production (HTTPS)
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60,
-    });
-
-    return reply.send({
-      message: "Verification successful",
-    });
-  } catch (error) {
-    console.error(error);
-    return reply.status(500).send({ message: "Verification failed" });
+    return reply.send(room);
   }
-});
+);
 
-/* ===============================
-   LOGOUT
-================================= */
+/* ============================
+   LIST ROOMS
+============================ */
 
-server.post("/auth/logout", async (request, reply) => {
-  reply.clearCookie("token");
-  return reply.send({ message: "Logged out successfully" });
-});
+server.get(
+  "/rooms",
+  { preHandler: authenticate },
+  async (request: any) => {
+    const userId = request.user.userId;
 
-/* ===============================
+    const rooms = await prisma.room.findMany({
+      where: {
+        members: {
+          some: {
+            userId,
+          },
+        },
+      },
+      include: {
+        owner: true,
+        members: true,
+      },
+    });
+
+    return rooms;
+  }
+);
+
+/* ============================
+   WEBSOCKET ROOM CONNECTION
+============================ */
+
+const activeRooms: Record<string, Set<any>> = {};
+
+server.get(
+  "/ws/rooms/:roomId",
+  { websocket: true },
+  (connection, request: any) => {
+
+    const { roomId } = request.params;
+
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader) {
+      connection.socket.close();
+      return;
+    }
+
+    try {
+      const token = authHeader.split(" ")[1];
+      const decoded: any = jwt.verify(
+        token,
+        process.env.JWT_SECRET as string
+      );
+
+      const userId = decoded.userId;
+
+      // Initialize room if not exists
+      if (!activeRooms[roomId]) {
+        activeRooms[roomId] = new Set();
+      }
+
+      activeRooms[roomId].add(connection.socket);
+
+      console.log(`User ${userId} joined room ${roomId}`);
+
+      // Notify others
+      activeRooms[roomId].forEach((client) => {
+        if (client !== connection.socket) {
+          client.send(
+            JSON.stringify({
+              type: "USER_JOINED",
+              userId,
+            })
+          );
+        }
+      });
+
+      // Handle incoming messages
+      connection.socket.on("message", (message: Buffer) => {
+        const data = message.toString();
+
+        // Broadcast to everyone in room
+        activeRooms[roomId].forEach((client) => {
+          if (client.readyState === 1) {
+            client.send(data);
+          }
+        });
+      });
+
+      // Handle disconnect
+      connection.socket.on("close", () => {
+        activeRooms[roomId].delete(connection.socket);
+        console.log(`User ${userId} left room ${roomId}`);
+      });
+
+    } catch (err) {
+      connection.socket.close();
+    }
+  }
+);
+
+
+/* ============================
    START SERVER
-================================= */
+============================ */
 
 const start = async () => {
   try {
