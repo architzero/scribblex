@@ -1,22 +1,51 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../api/axios";
+import Navbar from "../Components/Navbar";
+
+interface Room {
+  id: string;
+  name: string;
+  isPublic: boolean;
+  members: { id: string }[];
+  owner: { name: string | null; email: string };
+}
 
 const Dashboard = () => {
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [roomName, setRoomName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchRooms = async () => {
-    const res = await api.get("/rooms");
-    setRooms(res.data);
+    try {
+      setError(null);
+      const res = await api.get<Room[]>("/rooms");
+      setRooms(res.data);
+    } catch {
+      setError("Unable to load rooms. Please refresh.");
+    }
   };
 
   const createRoom = async () => {
-    await api.post("/rooms", {
-      name: roomName,
-      isPublic: true,
-    });
-    setRoomName("");
-    fetchRooms();
+    if (!roomName.trim()) {
+      setError("Room name is required.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      await api.post("/rooms", {
+        name: roomName.trim(),
+        isPublic: true,
+      });
+      setRoomName("");
+      await fetchRooms();
+    } catch {
+      setError("Failed to create room.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -24,60 +53,53 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div style={styles.container}>
-      <h2>Your Rooms</h2>
+    <div className="page-shell">
+      <Navbar title="Create rooms and start collaborating instantly." />
 
-      <div style={styles.createBox}>
-        <input
-          style={styles.input}
-          placeholder="Room name"
-          value={roomName}
-          onChange={(e) => setRoomName(e.target.value)}
-        />
-        <button style={styles.button} onClick={createRoom}>
-          Create
-        </button>
-      </div>
-
-      <div>
-        {rooms.map((room) => (
-          <div key={room.id} style={styles.roomCard}>
-            {room.name}
+      <section className="dashboard-grid">
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Create new room</h2>
+          <p className="text-muted">Use public rooms for open collaboration sessions.</p>
+          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+            <input
+              className="input"
+              placeholder="Room name (e.g., Product Brainstorm)"
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+            />
+            <button className="btn btn-primary" style={{ width: "auto", marginTop: 0 }} onClick={createRoom} disabled={isLoading}>
+              {isLoading ? "Creating..." : "Create"}
+            </button>
           </div>
-        ))}
-      </div>
+          {error ? <p className="feedback">{error}</p> : null}
+        </div>
+
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Room insights</h2>
+          <p className="text-muted">Total rooms: <strong>{rooms.length}</strong></p>
+          <p className="text-muted">Public rooms: <strong>{rooms.filter((room) => room.isPublic).length}</strong></p>
+        </div>
+      </section>
+
+      <section className="panel" style={{ maxWidth: 1080, margin: "24px auto 0" }}>
+        <h3 style={{ marginTop: 0 }}>Your rooms</h3>
+        <div className="room-list">
+          {rooms.length === 0 ? (
+            <p className="text-muted">No rooms yet. Create your first collaboration room.</p>
+          ) : (
+            rooms.map((room) => (
+              <article className="room-card" key={room.id}>
+                <strong>{room.name}</strong>
+                <div className="text-muted">
+                  Owner: {room.owner.name || room.owner.email} • Members: {room.members.length}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
-};
-
-const styles: any = {
-  container: {
-    padding: "40px",
-  },
-  createBox: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "20px",
-  },
-  input: {
-    padding: "10px",
-    borderRadius: "8px",
-    border: "none",
-  },
-  button: {
-    padding: "10px 16px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#6366f1",
-    color: "white",
-    cursor: "pointer",
-  },
-  roomCard: {
-    background: "#1e293b",
-    padding: "16px",
-    borderRadius: "12px",
-    marginBottom: "10px",
-  },
 };
 
 export default Dashboard;

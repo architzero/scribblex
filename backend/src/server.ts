@@ -7,11 +7,24 @@ import nodemailer from "nodemailer";
 import jwt from "jsonwebtoken";
 import websocket from "@fastify/websocket";
 
-
 dotenv.config();
+
+const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 
 const server = Fastify({ logger: true });
 server.register(websocket);
+
+server.addHook("onRequest", async (request, reply) => {
+  reply.header("Access-Control-Allow-Origin", FRONTEND_URL);
+  reply.header("Access-Control-Allow-Credentials", "true");
+  reply.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+
+  if (request.method === "OPTIONS") {
+    return reply.status(204).send();
+  }
+});
 
 
 /* ============================
@@ -50,7 +63,7 @@ server.register(oauthPlugin, {
     auth: oauthPlugin.GOOGLE_CONFIGURATION,
   },
   startRedirectPath: "/auth/google",
-  callbackUri: "http://localhost:4000/auth/google/callback",
+  callbackUri: `${BACKEND_URL}/auth/google/callback`,
 });
 
 /* ============================
@@ -143,7 +156,7 @@ server.get("/auth/google/callback", async function (request, reply) {
     });
 
     return reply.redirect(
-  `http://localhost:5173/auth/callback?email=${user.email}`
+  `${FRONTEND_URL}/auth/callback?email=${encodeURIComponent(user.email)}`
 );
   } catch (err) {
     console.error(err);
@@ -210,13 +223,15 @@ server.post(
     const { name, isPublic } = request.body;
     const userId = request.user.userId;
 
-    if (!name) {
-      return reply.status(400).send({ message: "Room name required" });
+    const cleanedName = typeof name === "string" ? name.trim() : "";
+
+    if (cleanedName.length < 3) {
+      return reply.status(400).send({ message: "Room name must be at least 3 characters" });
     }
 
     const room = await prisma.room.create({
       data: {
-        name,
+        name: cleanedName,
         isPublic: isPublic ?? true,
 
         owner: {

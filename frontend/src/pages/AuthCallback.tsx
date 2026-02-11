@@ -15,9 +15,16 @@ const AuthCallback = () => {
 
     localStorage.setItem("pendingEmail", email);
     navigate("/verify");
-  }, []);
+  }, [navigate, searchParams]);
 
-  return <div>Processing login...</div>;
+  return (
+    <div className="page-shell auth-center">
+      <div className="glass-card">
+        <h2 style={{ marginTop: 0 }}>Finalizing sign-in</h2>
+        <p className="text-muted">Redirecting you to OTP verification...</p>
+      </div>
+    </div>
+  );
 };
 
 export default AuthCallback;
