@@ -47,7 +47,7 @@ export async function registerPlugins(app: FastifyInstance) {
       auth: oauthPlugin.GOOGLE_CONFIGURATION,
     },
     startRedirectPath: "/auth/google",
-    callbackUri: "http://localhost:4000/auth/google/callback",
+    callbackUri: `${env.FRONTEND_URL.replace('5173', '4000').replace('http://localhost', 'http://localhost')}/auth/google/callback`,
   });
 
   // GitHub OAuth
@@ -62,7 +62,7 @@ export async function registerPlugins(app: FastifyInstance) {
       auth: oauthPlugin.GITHUB_CONFIGURATION,
     },
     startRedirectPath: "/auth/github",
-    callbackUri: "http://localhost:4000/auth/github/callback",
+    callbackUri: `${env.FRONTEND_URL.replace('5173', '4000').replace('http://localhost', 'http://localhost')}/auth/github/callback`,
   });
 
   // Apple OAuth
@@ -77,6 +77,6 @@ export async function registerPlugins(app: FastifyInstance) {
       auth: oauthPlugin.APPLE_CONFIGURATION,
     },
     startRedirectPath: "/auth/apple",
-    callbackUri: "http://localhost:4000/auth/apple/callback",
+    callbackUri: `${env.FRONTEND_URL.replace('5173', '4000').replace('http://localhost', 'http://localhost')}/auth/apple/callback`,
   });
 }

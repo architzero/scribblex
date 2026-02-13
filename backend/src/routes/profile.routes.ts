@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import prisma from "../prisma";
 import { logAudit } from "../utils/audit";
+import { env } from "../config/env";
 
 export async function profileRoutes(app: FastifyInstance) {
 
@@ -18,7 +19,7 @@ export async function profileRoutes(app: FastifyInstance) {
 
     try {
       const jwt = require("jsonwebtoken");
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded: any = jwt.verify(token, env.JWT_SECRET);
 
       const { username, displayName, bio, role, skills, avatarUrl } = request.body;
 
@@ -90,7 +91,7 @@ export async function profileRoutes(app: FastifyInstance) {
 
     try {
       const jwt = require("jsonwebtoken");
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded: any = jwt.verify(token, env.JWT_SECRET);
 
       const { username, displayName, bio, role, skills, avatarUrl } = request.body;
 
@@ -164,7 +165,7 @@ export async function profileRoutes(app: FastifyInstance) {
 
     try {
       const jwt = require("jsonwebtoken");
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded: any = jwt.verify(token, env.JWT_SECRET);
 
       // Delete user (cascade will handle related records)
       await prisma.user.delete({

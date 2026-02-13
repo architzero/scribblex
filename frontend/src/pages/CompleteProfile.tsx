@@ -1,89 +1,65 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { DrawAvatar } from '../components/DrawAvatar';
-import { GridBg } from '../components/GridBg';
-import { AnimatedTitle } from '../components/AnimatedTitle';
-import { User, Upload, Pencil, Sparkles, Check, X, ChevronDown, Instagram, Github, Linkedin, MessageCircle, Send } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { fetchCountries, generateSmartUsernameSuggestions, type Country } from '../utils/profileUtils';
 
-const socialPlatforms = [
-  { value: 'instagram', label: 'Instagram', icon: Instagram, placeholder: 'username' },
-  { value: 'discord', label: 'Discord', icon: MessageCircle, placeholder: 'username#1234' },
-  { value: 'github', label: 'GitHub', icon: Github, placeholder: 'username' },
-  { value: 'snapchat', label: 'Snapchat', icon: Send, placeholder: 'username' },
-  { value: 'linkedin', label: 'LinkedIn', icon: Linkedin, placeholder: 'username' },
-];
+const AVATAR_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF8B94', '#C7CEEA', '#B4A7D6', '#95E1D3'];
 
 export default function CompleteProfile() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setUser } = useAuth();
-  const [loading, setLoading] = useState(false);
   
+  const [formData, setFormData] = useState({
+    name: '',
+    username: '',
+    country: '',
+    color: '#FF6B6B',
+    bio: '',
+    dob: '',
+  });
+
+  const [currentStep, setCurrentStep] = useState<'name' | 'username' | 'country' | 'dob' | 'bio' | 'done'>('name');
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [loadingCountries, setLoadingCountries] = useState(true);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
     const token = searchParams.get('token');
     if (token) localStorage.setItem('accessToken', token);
     
     fetchCountries().then(data => {
-      console.log('Fetched countries:', data.length);
       setCountries(data);
       setLoadingCountries(false);
-    }).catch(err => {
-      console.error('Error fetching countries:', err);
-      setLoadingCountries(false);
-    });
+    }).catch(() => setLoadingCountries(false));
   }, [searchParams]);
-  
-  const [avatar, setAvatar] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [bio, setBio] = useState('');
-  const [country, setCountry] = useState('');
-  const [dob, setDob] = useState('');
-  const [socialLinks, setSocialLinks] = useState<Array<{platform: string, url: string}>>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [loadingCountries, setLoadingCountries] = useState(true);
-  
-  const [showDraw, setShowDraw] = useState(false);
-  const [showPresets, setShowPresets] = useState(false);
-  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
-  const [countrySearch, setCountrySearch] = useState('');
-  const [usernameChecking, setUsernameChecking] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
-  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
-  
-  const [showSocialDropdown, setShowSocialDropdown] = useState(false);
-  const [editingSocial, setEditingSocial] = useState<string | null>(null);
-  const [editSocialUrl, setEditSocialUrl] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.email) setUserEmail(user.email);
-  }, []);
 
   useEffect(() => {
     const checkUsername = async () => {
-      if (!username || username.length < 3) {
+      if (!formData.username || formData.username.length < 3) {
         setUsernameAvailable(null);
         return;
       }
       
       setUsernameChecking(true);
       try {
-        const response = await api.get(`/user/check-username/${username}`);
+        const response = await api.get(`/user/check-username/${formData.username}`);
         setUsernameAvailable(response.data.available);
         if (!response.data.available) {
-          setUsernameSuggestions(generateSmartUsernameSuggestions(username, fullName));
+          setUsernameSuggestions(generateSmartUsernameSuggestions(formData.username, formData.name));
         } else {
           setUsernameSuggestions([]);
         }
       } catch (error) {
-        setUsernameAvailable(null);
+        console.error('Username check failed:', error);
+        setUsernameAvailable(true);
         setUsernameSuggestions([]);
       } finally {
         setUsernameChecking(false);
@@ -92,125 +68,68 @@ export default function CompleteProfile() {
     
     const timer = setTimeout(checkUsername, 500);
     return () => clearTimeout(timer);
-  }, [username, fullName]);
+  }, [formData.username, formData.name]);
 
-  const filteredCountries = countries.filter(c => 
-    c.name.toLowerCase().includes(countrySearch.toLowerCase())
-  );
+  const initials = formData.name
+    .split(' ')
+    .filter(n => n.length > 0)
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
-  const selectedCountry = countries.find(c => c.name === country);
+  const selectedCountry = countries.find(c => c.name === formData.country);
+  const joinDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setAvatar(event.target?.result as string);
-        setShowDraw(false);
-        setShowPresets(false);
-      };
-      reader.readAsDataURL(file);
+  const goToNextStep = () => {
+    if (currentStep === 'name' && formData.name.trim()) {
+      setCurrentStep('username');
+    } else if (currentStep === 'username' && formData.username && formData.username.length >= 3) {
+      setCurrentStep('country');
+    } else if (currentStep === 'country' && formData.country) {
+      setCurrentStep('dob');
+    } else if (currentStep === 'dob' && formData.dob) {
+      setCurrentStep('bio');
+    } else if (currentStep === 'bio') {
+      handleSubmit();
     }
   };
 
-  const startEditingSocial = (platform: string) => {
-    const current = socialLinks.find(l => l.platform === platform);
-    setEditingSocial(platform);
-    setEditSocialUrl(current?.url || '');
-    setShowSocialDropdown(false);
+  const handleBack = () => {
+    if (currentStep === 'username') setCurrentStep('name');
+    else if (currentStep === 'country') setCurrentStep('username');
+    else if (currentStep === 'dob') setCurrentStep('country');
+    else if (currentStep === 'bio') setCurrentStep('dob');
   };
-
-  const saveSocialLink = () => {
-    if (editSocialUrl.trim() && editingSocial) {
-      const exists = socialLinks.find(l => l.platform === editingSocial);
-      if (exists) {
-        setSocialLinks(socialLinks.map(l => l.platform === editingSocial ? { ...l, url: editSocialUrl.trim() } : l));
-      } else {
-        setSocialLinks([...socialLinks, { platform: editingSocial, url: editSocialUrl.trim() }]);
-      }
-      setEditingSocial(null);
-      setEditSocialUrl('');
-      toast.success('Social link added!');
-    }
-  };
-
-  const cancelEditingSocial = () => {
-    setEditingSocial(null);
-    setEditSocialUrl('');
-  };
-
-  const shareCard = async () => {
-    const cardElement = document.getElementById('profile-card');
-    if (!cardElement) return;
-
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(cardElement, { backgroundColor: '#ffffff' });
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const file = new File([blob], 'profile-card.png', { type: 'image/png' });
-          if (navigator.share && navigator.canShare({ files: [file] })) {
-            navigator.share({ files: [file], title: 'My ScribbleX Profile' });
-          } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'profile-card.png';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        }
-      });
-    } catch (error) {
-      toast.error('Failed to share card');
-    }
-  };
-
-  const removeSocialLink = (index: number) => {
-    setSocialLinks(socialLinks.filter((_, i) => i !== index));
-  };
-
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
 
   const handleSubmit = async () => {
-    if (!fullName.trim()) {
-      toast.error('Please enter your name');
-      return;
-    }
-
-    if (!username.trim() || username.length < 3) {
-      toast.error('Username must be at least 3 characters');
-      return;
-    }
-
-    if (usernameAvailable === false) {
-      toast.error('Username is already taken');
-      return;
-    }
-
-    if (!country) {
-      toast.error('Please select your country');
+    const birthDate = new Date(formData.dob);
+    const today = new Date();
+    const age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) ? age - 1 : age;
+    
+    if (actualAge < 13) {
+      toast.error('You must be at least 13 years old');
       return;
     }
 
     setLoading(true);
     try {
       const response = await api.post('/user/complete-profile', {
-        name: fullName,
-        username: username,
-        avatar: avatar,
-        bio: bio,
-        location: country,
-        dateOfBirth: dob,
-        socialLinks: socialLinks
+        name: formData.name,
+        username: formData.username,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=${formData.color.slice(1)}&color=fff&size=200`,
+        bio: formData.bio,
+        location: formData.country,
+        dateOfBirth: formData.dob,
+        socialLinks: []
       });
       
       if (response.data.success && response.data.user) {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         setUser(response.data.user);
-        toast.success('Welcome to ScribbleX!');
-        navigate('/dashboard');
+        setCurrentStep('done');
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to complete profile');
@@ -219,438 +138,274 @@ export default function CompleteProfile() {
     }
   };
 
-  const canSubmit = fullName.trim() && 
-                    username.trim().length >= 3 && 
-                    username !== fullName.toLowerCase().replace(/\s+/g, '') &&
-                    usernameAvailable === true && 
-                    country &&
-                    dob;
-
   return (
-    <div className="relative min-h-screen bg-[#fafaf9] overflow-hidden">
-      <GridBg />
-      
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="absolute top-8 left-8 z-20"
-      >
-        <h1 className="text-[28px] tracking-tight text-[#1a1a1a]" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-          <AnimatedTitle noFlicker />
-        </h1>
+    <div className="min-h-screen bg-white flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute inset-0 opacity-[0.03]" style={{
+        backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`,
+        backgroundSize: '24px 24px',
+      }} />
+
+      <motion.div animate={{ x: [0, 30, 0], y: [0, -40, 0], rotate: [0, 5, 0] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} className="absolute top-20 left-[10%] w-24 h-24 border-2 border-gray-200 rounded-full opacity-40" />
+      <motion.div animate={{ x: [0, -20, 0], y: [0, 30, 0] }} transition={{ duration: 13, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[35%] left-[5%] w-16 h-16 border-2 border-gray-200 rounded-full opacity-35" />
+      <motion.div animate={{ x: [0, 25, 0], y: [0, -25, 0], rotate: [0, 8, 0] }} transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }} className="absolute top-[60%] left-[8%] w-20 h-20 border-2 border-gray-200 opacity-40" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
+      <motion.div animate={{ x: [0, -25, 0], y: [0, 35, 0], rotate: [0, -8, 0] }} transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }} className="absolute top-1/3 right-[12%] w-32 h-32 opacity-30">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <path d="M 20 50 L 35 20 L 65 20 L 80 50 L 65 80 L 35 80 Z" fill="none" stroke="#000" strokeWidth="2" opacity="0.2" />
+        </svg>
       </motion.div>
 
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center py-12 px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-16 text-center"
-        >
-          <h2 className="text-[48px] font-bold text-[#1a1a1a] mb-3 tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Complete Your Profile</h2>
-          <p className="text-[16px] text-[#666666]" style={{ fontFamily: 'Inter, sans-serif' }}>Just a few details to get started</p>
-        </motion.div>
+      <div className="w-full max-w-5xl relative z-10">
+        <div className="grid md:grid-cols-2 gap-20 items-center">
+          
+          <div>
+            {currentStep !== 'name' && currentStep !== 'done' && (
+              <button onClick={handleBack} className="mb-8 text-gray-400 hover:text-gray-600 flex items-center gap-2 text-sm">
+                ← Back
+              </button>
+            )}
 
-        <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-12 items-start">
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white rounded-3xl p-10 shadow-sm border border-black/[0.06] overflow-visible max-h-none">
-            <div className="space-y-6">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#666666] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Email Address</label>
-                <input 
-                  type="email" 
-                  value={userEmail} 
-                  disabled 
-                  className="w-full px-0 py-3 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent text-gray-400 cursor-not-allowed focus:outline-none" 
-                  style={{ fontFamily: 'Inter, sans-serif' }} 
-                />
+            <div className="mb-20">
+              <div className="flex items-center gap-3">
+                <svg width="44" height="44" viewBox="0 0 32 32" fill="none">
+                  <path d="M8 4 Q 4 4, 4 8 L 4 24 Q 4 28, 8 28 L 24 28 Q 28 28, 28 24 L 28 8 Q 28 4, 24 4 Z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                  <path d="M 10 16 Q 12 10, 16 12 T 22 16" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                </svg>
+                <div>
+                  <div className="font-bold text-2xl tracking-tight leading-none">ScribbleX</div>
+                  <div className="text-[10px] text-gray-600 tracking-[0.2em] font-bold mt-1.5">CREATE YOUR PROFILE</div>
+                </div>
               </div>
-              <div className="text-center pt-4 pb-2">
-                <label className="block text-[11px] font-semibold text-[#666666] uppercase tracking-wider mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>Profile Picture</label>
-                <div className="flex flex-col items-center gap-4">
-                  <motion.div 
-                    whileHover={{ scale: 1.03 }}
-                    className="relative w-[108px] h-[108px] mx-auto rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition-all duration-200 hover:ring-4 hover:ring-indigo-400/20"
-                  >
-                    {avatar ? (
-                      <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
-                        <User className="w-12 h-12 text-indigo-300" />
+            </div>
+
+            <AnimatePresence mode="wait">
+              {currentStep === 'name' && (
+                <motion.div key="name" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">01</div>
+                    <h2 className="text-3xl mb-4 font-medium">What's your name?</h2>
+                    <input 
+                      type="text" 
+                      value={formData.name} 
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && formData.name.trim()) {
+                          goToNextStep();
+                        }
+                      }}
+                      className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none placeholder:text-gray-300" 
+                      placeholder="Type here..." 
+                      autoFocus 
+                    />
+                  </div>
+                  <button onClick={goToNextStep} disabled={!formData.name.trim()} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Press Enter ↵</button>
+                </motion.div>
+              )}
+
+              {currentStep === 'username' && (
+                <motion.div key="username" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">02</div>
+                    <h2 className="text-3xl mb-4 font-medium">Pick a username</h2>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={formData.username} 
+                        onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) })} 
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && formData.username && formData.username.length >= 3) {
+                            goToNextStep();
+                          }
+                        }}
+                        className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none placeholder:text-gray-300 pr-10" 
+                        placeholder="username" 
+                        autoFocus 
+                      />
+                      {usernameChecking && <div className="absolute right-2 top-2 w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />}
+                      {!usernameChecking && usernameAvailable === true && <Check className="absolute right-2 top-2 w-5 h-5 text-green-600" />}
+                      {!usernameChecking && usernameAvailable === false && <div className="absolute right-2 top-2 w-5 h-5 text-red-600 font-bold">✗</div>}
+                    </div>
+                    {formData.username.length >= 3 && (
+                      <div className="mt-2 text-sm">
+                        <span className="text-gray-500">scribbleX.com/@{formData.username}</span>
+                        {!usernameChecking && usernameAvailable === true && <span className="text-green-600 ml-2 font-medium">✓ Available</span>}
+                        {!usernameChecking && usernameAvailable === false && <span className="text-red-600 ml-2 font-medium">✗ Taken</span>}
                       </div>
                     )}
-                  </motion.div>
-                  <div className="flex justify-center gap-3">
-                    <input type="file" id="avatar" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-                    <motion.button 
-                      whileHover={{ scale: 1.05, y: -1 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => document.getElementById('avatar')?.click()} 
-                      className="px-4 py-2 rounded-full border border-gray-300 bg-white text-sm font-medium transition-all duration-200 hover:bg-gray-50 hover:border-gray-400 flex items-center gap-2"
-                      style={{ fontFamily: 'Inter, sans-serif' }}
-                    >
-                      <Upload className="w-4 h-4" />Upload
-                    </motion.button>
-                    <motion.button 
-                      whileHover={{ scale: 1.05, y: -1 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => { setShowDraw(!showDraw); setShowPresets(false); }} 
-                      className="px-4 py-2 rounded-full border border-gray-300 bg-white text-sm font-medium transition-all duration-200 hover:bg-gray-50 hover:border-gray-400 flex items-center gap-2"
-                      style={{ fontFamily: 'Inter, sans-serif' }}
-                    >
-                      <Pencil className="w-4 h-4" />Draw
-                    </motion.button>
-                    <motion.button 
-                      whileHover={{ scale: 1.05, y: -1 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => { setShowPresets(!showPresets); setShowDraw(false); }} 
-                      className="px-4 py-2 rounded-full border border-gray-300 bg-white text-sm font-medium transition-all duration-200 hover:bg-gray-50 hover:border-gray-400 flex items-center gap-2"
-                      style={{ fontFamily: 'Inter, sans-serif' }}
-                    >
-                      <Sparkles className="w-4 h-4" />Presets
-                    </motion.button>
-                  </div>
-                </div>
-
-                {showDraw && (
-                  <div className="mt-4">
-                    <DrawAvatar onDone={(dataUrl) => { setAvatar(dataUrl); setShowDraw(false); }} />
-                  </div>
-                )}
-
-                {showPresets && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="mt-4 grid grid-cols-5 gap-3"
-                  >
-                    {[
-                      'https://api.dicebear.com/9.x/bottts/svg?seed=Midnight&backgroundColor=b6e3f4',
-                      'https://api.dicebear.com/9.x/avataaars/svg?seed=Felix&backgroundColor=c0aede',
-                      'https://api.dicebear.com/9.x/lorelei/svg?seed=Luna&backgroundColor=ffd5dc',
-                      'https://api.dicebear.com/9.x/adventurer/svg?seed=Max&backgroundColor=ffdfbf',
-                      'https://api.dicebear.com/9.x/big-smile/svg?seed=Happy&backgroundColor=d1d4f9',
-                      'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Dragon&backgroundColor=b6e3f4',
-                      'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=Robot&backgroundColor=c0aede',
-                      'https://api.dicebear.com/9.x/pixel-art/svg?seed=Gamer&backgroundColor=ffd5dc',
-                      'https://api.dicebear.com/9.x/thumbs/svg?seed=Cool&backgroundColor=ffdfbf',
-                      'https://api.dicebear.com/9.x/notionists/svg?seed=Smart&backgroundColor=d1d4f9',
-                    ].map((url, index) => (
-                      <motion.button 
-                        key={index}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => { setAvatar(url); setShowPresets(false); }} 
-                        className="aspect-square rounded-full overflow-hidden border-2 border-black/5 hover:border-black/15 transition-all shadow-sm hover:shadow-md bg-white"
-                      >
-                        <img src={url} alt={`Avatar ${index + 1}`} className="w-full h-full" />
-                      </motion.button>
-                    ))}
-                  </motion.div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#666666] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Full Name *</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter your full name" 
-                  value={fullName} 
-                  onChange={(e) => setFullName(e.target.value)} 
-                  className="w-full px-0 py-3 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent focus:outline-none focus:border-indigo-500 transition-colors" 
-                  style={{ fontFamily: 'Inter, sans-serif' }} 
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#666666] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Username *</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="Choose a unique username" 
-                    value={username} 
-                    onChange={(e) => {
-                      const val = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                      if (val.length <= 20) setUsername(val);
-                    }} 
-                    className="w-full px-0 py-3 pr-12 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent focus:outline-none focus:border-indigo-500 transition-colors" 
-                    style={{ fontFamily: 'Inter, sans-serif' }} 
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {usernameChecking && <div className="w-5 h-5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" />}
-                    {!usernameChecking && usernameAvailable === true && (
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 15 }}>
-                        <Check className="w-5 h-5 text-green-600" />
-                      </motion.div>
-                    )}
-                    {!usernameChecking && usernameAvailable === false && <X className="w-5 h-5 text-red-600" />}
-                  </div>
-                </div>
-                {username && (
-                  <div className="mt-2">
-                    <p className="text-sm text-[#666666]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                      scribbleX.com/@{username}
-                      {!usernameChecking && usernameAvailable === true && <span className="text-green-600 ml-2 font-medium">✓ Available</span>}
-                      {!usernameChecking && usernameAvailable === false && <span className="text-red-600 ml-2 font-medium">✗ Taken</span>}
-                    </p>
-                    {username.length < 3 && <p className="text-xs text-red-600 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>Username must be at least 3 characters</p>}
-                    {username === fullName.toLowerCase().replace(/\s+/g, '') && <p className="text-xs text-red-600 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>Username cannot be same as name</p>}
                     {usernameSuggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="text-sm text-[#666666]" style={{ fontFamily: 'Inter, sans-serif' }}>Try:</span>
-                        {usernameSuggestions.map((suggestion, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => setUsername(suggestion)}
-                            className="text-sm px-3 py-1 bg-[#fafaf9] text-[#1a1a1a] rounded-full hover:bg-[#f5f5f4] transition-all border border-black/5"
-                            style={{ fontFamily: 'Inter, sans-serif' }}
-                          >
-                            {suggestion}
-                          </button>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        <span className="text-sm text-gray-500">Try:</span>
+                        {usernameSuggestions.map((s, i) => (
+                          <button key={i} onClick={() => setFormData({ ...formData, username: s })} className="text-sm px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200">{s}</button>
                         ))}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                  <button onClick={goToNextStep} disabled={!formData.username || formData.username.length < 3} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Press Enter ↵</button>
+                </motion.div>
+              )}
 
-              <div>
-                <label className="block text-[11px] font-semibold text-[#666666] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Country *</label>
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowCountryDropdown(!showCountryDropdown)} 
-                    className="w-full px-0 py-3 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent hover:border-indigo-500 focus:outline-none focus:border-indigo-500 flex items-center justify-between text-left transition-colors"
-                  >
-                    {selectedCountry ? (
-                      <span className="flex items-center gap-3">
-                        <img src={selectedCountry.flag} alt={selectedCountry.name} className="w-6 h-4 object-cover rounded" />
-                        <span className="text-[#1a1a1a]" style={{ fontFamily: 'Inter, sans-serif' }}>{selectedCountry.name}</span>
-                      </span>
-                    ) : loadingCountries ? (
-                      <span className="text-[#999999]" style={{ fontFamily: 'Inter, sans-serif' }}>Loading countries...</span>
+              {currentStep === 'country' && (
+                <motion.div key="country" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">03</div>
+                    <h2 className="text-3xl mb-4 font-medium">Where are you from?</h2>
+                    {loadingCountries ? (
+                      <div className="flex items-center gap-3 text-gray-400">
+                        <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+                        <span>Loading countries...</span>
+                      </div>
                     ) : (
-                      <span className="text-[#999999]" style={{ fontFamily: 'Inter, sans-serif' }}>Select your country</span>
+                      <select 
+                        value={formData.country} 
+                        onChange={(e) => { 
+                          setFormData({ ...formData, country: e.target.value }); 
+                          if (e.target.value) setTimeout(() => goToNextStep(), 100); 
+                        }} 
+                        className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none" 
+                        autoFocus
+                      >
+                        <option value="">Select country...</option>
+                        {countries.map(c => (
+                          <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
+                        ))}
+                      </select>
                     )}
-                    <ChevronDown className={`w-5 h-5 text-[#999999] transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
-                  </button>
+                  </div>
+                  <button onClick={goToNextStep} disabled={!formData.country} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Select to continue</button>
+                </motion.div>
+              )}
 
-                  {showCountryDropdown && (
-                    <div className="absolute z-[100] w-full mt-2 bg-white border border-black/10 rounded-lg shadow-xl overflow-hidden">
-                      <div className="p-3 border-b border-black/5 sticky top-0 bg-white z-10">
-                        <input 
-                          type="text" 
-                          placeholder="Search countries..." 
-                          value={countrySearch} 
-                          onChange={(e) => setCountrySearch(e.target.value)} 
-                          autoFocus
-                          className="w-full px-3 py-2 border border-black/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black/5" 
-                          style={{ fontFamily: 'Inter, sans-serif' }} 
-                        />
-                      </div>
-                      <div className="max-h-52 overflow-y-auto">
-                        {filteredCountries.length === 0 ? (
-                          <div className="px-4 py-8 text-center text-sm text-[#999999]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            {countrySearch ? 'No countries found' : 'Loading...'}
-                          </div>
-                        ) : (
-                          filteredCountries.map((c) => (
-                            <button 
-                              key={c.code} 
-                              onClick={() => { setCountry(c.name); setShowCountryDropdown(false); setCountrySearch(''); }} 
-                              className="w-full px-4 py-3 hover:bg-[#fafaf9] flex items-center gap-3 text-left transition-colors"
-                            >
-                              <img src={c.flag} alt={c.name} className="w-6 h-4 object-cover rounded" />
-                              <span className="text-[#1a1a1a]" style={{ fontFamily: 'Inter, sans-serif' }}>{c.name}</span>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
+              {currentStep === 'dob' && (
+                <motion.div key="dob" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">04</div>
+                    <h2 className="text-3xl mb-4 font-medium">When's your birthday?</h2>
+                    <input 
+                      type="date" 
+                      value={formData.dob} 
+                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })} 
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && formData.dob) {
+                          goToNextStep();
+                        }
+                      }}
+                      max={new Date().toISOString().split('T')[0]} 
+                      className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none" 
+                      autoFocus 
+                    />
+                  </div>
+                  <button onClick={goToNextStep} disabled={!formData.dob} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Press Enter ↵</button>
+                </motion.div>
+              )}
+
+              {currentStep === 'bio' && (
+                <motion.div key="bio" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">05</div>
+                    <h2 className="text-3xl mb-4 font-medium">Tell us about yourself</h2>
+                    <textarea 
+                      value={formData.bio} 
+                      onChange={(e) => setFormData({ ...formData, bio: e.target.value.slice(0, 160) })} 
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          goToNextStep();
+                        }
+                      }}
+                      className="text-xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none placeholder:text-gray-300 resize-none" 
+                      placeholder="Optional..." 
+                      rows={3} 
+                      autoFocus 
+                    />
+                    <div className="text-sm text-gray-400 text-right">{formData.bio.length}/160</div>
+                  </div>
+                  <div className="flex gap-4">
+                    <button onClick={() => handleSubmit()} className="text-gray-400 hover:text-gray-600">Skip →</button>
+                    <button onClick={goToNextStep} disabled={loading} className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50">{loading ? 'Creating...' : 'Finish'}</button>
+                  </div>
+                </motion.div>
+              )}
+
+              {currentStep === 'done' && (
+                <motion.div key="done" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                  <div className="text-6xl mb-4">✓</div>
+                  <h2 className="text-3xl mb-4 font-medium">Ready to create</h2>
+                  <p className="text-gray-500">Your profile is set up. Let's start scribbling.</p>
+                  <button onClick={() => navigate('/dashboard')} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800">Open Canvas →</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} 
+            animate={{ opacity: 1, x: 0 }} 
+            whileHover={{ y: -6, boxShadow: "0 20px 40px rgba(0,0,0,0.15)" }} 
+            transition={{ type: "spring", stiffness: 300, damping: 20 }} 
+            className="relative group"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-black rounded-2xl transform translate-x-3 translate-y-3 transition-transform group-hover:translate-x-4 group-hover:translate-y-4" />
+            <div className="relative bg-white border-2 border-black rounded-2xl p-8 space-y-6 shadow-xl">
+              <div className="flex items-start gap-4">
+                <motion.div 
+                  whileHover={{ scale: 1.15, rotate: [0, -10, 10, -10, 0] }} 
+                  transition={{ duration: 0.6 }} 
+                  className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold text-white shadow-lg ring-2 ring-white cursor-pointer" 
+                  style={{ backgroundColor: formData.color }}
+                >
+                  {initials || '?'}
+                </motion.div>
+                <div className="flex-1">
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    className="font-bold text-2xl mb-1"
+                  >
+                    {formData.name || 'Your Name'}
+                  </motion.div>
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    transition={{ delay: 0.1 }} 
+                    className="text-gray-500 text-base mb-2"
+                  >
+                    @{formData.username || 'username'}
+                  </motion.div>
+                  {selectedCountry && (
+                    <motion.div 
+                      initial={{ scale: 0 }} 
+                      animate={{ scale: 1 }} 
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-full text-sm text-gray-700 font-medium"
+                    >
+                      <span>{selectedCountry.flag}</span>
+                      <span>{selectedCountry.name}</span>
+                    </motion.div>
                   )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-[#666666] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Date of Birth *</label>
-                <input 
-                  type="date" 
-                  value={dob} 
-                  onChange={(e) => setDob(e.target.value)} 
-                  max={new Date().toISOString().split('T')[0]} 
-                  className="w-full px-0 py-3 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent focus:outline-none focus:border-indigo-500 transition-colors" 
-                  style={{ fontFamily: 'Inter, sans-serif' }} 
-                />
-              </div>
+              {formData.bio && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  className="p-4 bg-gray-50 rounded-xl border-l-4 border-black"
+                >
+                  <p className="text-sm text-gray-700 leading-relaxed">{formData.bio}</p>
+                </motion.div>
+              )}
 
-              <div>
-                <label className="block text-[11px] font-semibold text-[#999999] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Bio (Optional)</label>
-                <textarea 
-                  placeholder="Tell us about yourself..." 
-                  value={bio} 
-                  onChange={(e) => setBio(e.target.value.slice(0, 160))} 
-                  rows={3} 
-                  className="w-full px-0 py-3 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent resize-none focus:outline-none focus:border-indigo-500 transition-colors" 
-                  style={{ fontFamily: 'Inter, sans-serif' }} 
-                />
-                <div className="text-right text-xs text-[#999999] mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>{bio.length}/160</div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#999999] uppercase tracking-wider mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>Social Links (Optional)</label>
-                
-                {!editingSocial && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowSocialDropdown(!showSocialDropdown)}
-                      className="w-full px-0 py-3 text-[15px] border-0 border-b-2 border-gray-200 bg-transparent hover:border-indigo-500 focus:outline-none focus:border-indigo-500 flex items-center justify-between text-left transition-colors"
-                    >
-                      <span className="text-[#666666]" style={{ fontFamily: 'Inter, sans-serif' }}>Add social media</span>
-                      <ChevronDown className={`w-5 h-5 text-[#999999] transition-transform ${showSocialDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {showSocialDropdown && (
-                      <div className="absolute left-0 right-0 z-[100] mt-2 bg-white border border-black/[0.06] rounded-2xl shadow-2xl max-h-64 overflow-y-auto">
-                        {socialPlatforms.map((platform) => {
-                          const added = socialLinks.find(l => l.platform === platform.value);
-                          const Icon = platform.icon;
-                          return (
-                            <button
-                              key={platform.value}
-                              onClick={() => startEditingSocial(platform.value)}
-                              className="w-full px-4 py-3 hover:bg-[#fafaf9] flex items-center gap-3 text-left transition-colors border-b border-black/5 last:border-0"
-                            >
-                              <Icon className="w-5 h-5 text-[#666666]" />
-                              <div className="flex-1">
-                                <div className="text-sm font-medium text-[#1a1a1a]" style={{ fontFamily: 'Inter, sans-serif' }}>{platform.label}</div>
-                                {added && <div className="text-xs text-[#999999] truncate" style={{ fontFamily: 'Inter, sans-serif' }}>{added.url}</div>}
-                              </div>
-                              {added && <Check className="w-4 h-4 text-green-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {editingSocial && (
+              <div className="flex items-center justify-between text-xs pt-4 border-t-2 border-gray-100">
+                <div className="flex items-center gap-2">
                   <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="p-4 bg-[#fafaf9] rounded-lg border border-black/10"
-                  >
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>{socialPlatforms.find(p => p.value === editingSocial)?.label}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editSocialUrl}
-                        onChange={(e) => setEditSocialUrl(e.target.value)}
-                        placeholder={socialPlatforms.find(p => p.value === editingSocial)?.placeholder}
-                        className="flex-1 px-4 py-3 text-sm rounded-xl border border-gray-300 bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
-                        style={{ fontFamily: 'Inter, sans-serif' }}
-                        autoFocus
-                        onKeyPress={(e) => e.key === 'Enter' && saveSocialLink()}
-                      />
-                      <button onClick={saveSocialLink} className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition-all">
-                        <Check className="w-4 h-4" />
-                      </button>
-                      <button onClick={cancelEditingSocial} className="px-4 py-2 bg-white border border-black/10 rounded-lg hover:bg-[#fafaf9] transition-all">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-
-              <motion.button 
-                onClick={handleSubmit} 
-                disabled={!canSubmit || loading}
-                whileHover={{ scale: canSubmit && !loading ? 1.02 : 1 }}
-                whileTap={{ scale: canSubmit && !loading ? 0.98 : 1 }}
-                className="w-full py-4 rounded-full bg-[#1a1a1a] text-white font-semibold text-[15px] hover:bg-[#2a2a2a] transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-8"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                {loading ? 'Creating...' : 'Complete Profile'}
-              </motion.button>
-            </div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:sticky lg:top-8 h-fit"
-          >
-            <motion.div
-              className="bg-white rounded-2xl p-8 border border-black/5 shadow-lg relative overflow-hidden"
-            >
-              <div className="space-y-6" id="profile-card">
-                {socialLinks.length > 0 && (
-                  <div className="absolute top-8 right-8 flex gap-2">
-                    {socialLinks.map((link, index) => {
-                      const platform = socialPlatforms.find(p => p.value === link.platform);
-                      const Icon = platform?.icon || Github;
-                      const urls: Record<string, (url: string) => string> = {
-                        instagram: (url) => `https://instagram.com/${url.replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//, '')}`,
-                        discord: (url) => url.startsWith('http') ? url : `https://discord.com/users/${url}`,
-                        github: (url) => `https://github.com/${url.replace(/^@/, '').replace(/^https?:\/\/(www\.)?github\.com\//, '')}`,
-                        snapchat: (url) => `https://snapchat.com/add/${url.replace(/^@/, '').replace(/^https?:\/\/(www\.)?snapchat\.com\/add\//, '')}`,
-                        linkedin: (url) => url.startsWith('http') ? url : `https://linkedin.com/in/${url.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, '')}`,
-                      };
-                      return (
-                        <motion.a
-                          key={index}
-                          href={urls[link.platform]?.(link.url) || link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          whileHover={{ scale: 1.1 }}
-                          transition={{ duration: 0.15 }}
-                          className="w-8 h-8 flex items-center justify-center rounded-full border border-black/10 bg-white hover:bg-[#fafaf9] transition-all duration-150"
-                        >
-                          <Icon className="w-4 h-4 text-[#666666]" />
-                        </motion.a>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="flex items-start gap-6">
-                  <motion.div whileHover={{ scale: 1.03 }} transition={{ duration: 0.2 }}>
-                    {avatar ? (
-                      <div className="w-24 h-24 rounded-full overflow-hidden ring-2 ring-black/5 shadow-md">
-                        <img src={avatar} alt="Preview" className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center ring-2 ring-black/5 shadow-md">
-                        <User className="w-10 h-10 text-gray-400" />
-                      </div>
-                    )}
-                  </motion.div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-semibold text-[#1a1a1a] mb-1 truncate" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>{fullName || 'Your Name'}</h3>
-                    <p className="text-sm text-[#666666] mb-3" style={{ fontFamily: 'Inter, sans-serif' }}>@{username || 'username'}</p>
-                    {country && selectedCountry && (
-                      <div className="flex items-center gap-2 text-xs text-[#999999]">
-                        <img src={selectedCountry.flag} alt={selectedCountry.name} className="w-4 h-3 object-cover rounded" />
-                        <span style={{ fontFamily: 'Inter, sans-serif' }}>{selectedCountry.name}</span>
-                      </div>
-                    )}
-                  </div>
+                    animate={{ scale: [1, 1.2, 1] }} 
+                    transition={{ duration: 2, repeat: Infinity }} 
+                    className="w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-pink-500 rounded-full shadow-sm" 
+                  />
+                  <span className="font-bold text-gray-800 tracking-wide">MEMBER</span>
                 </div>
-
-                {bio && (
-                  <div className="p-4 bg-[#fafaf9] rounded-xl border border-black/5">
-                    <p className="text-sm text-[#666666] leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>"{bio}"</p>
-                  </div>
-                )}
+                <span className="text-gray-500 font-medium">Joined {joinDate}</span>
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         </div>
       </div>

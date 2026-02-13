@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { authenticate } from '../middleware/authenticate';
-import { prisma } from '../server';
+import prisma from '../prisma';
 import { z } from 'zod';
 
 const completeProfileSchema = z.object({
