@@ -30,15 +30,19 @@ export default function VerifyOTP() {
       if (data.success) {
         localStorage.setItem('accessToken', data.token);
         
-        // Fetch user data
         const userResponse = await api.get('/auth/me');
         if (userResponse.data.success) {
           localStorage.setItem('user', JSON.stringify(userResponse.data.user));
           setUser(userResponse.data.user);
+          
+          toast.success('Email verified!');
+          
+          if (!userResponse.data.user.profileCompleted) {
+            navigate('/complete-profile');
+          } else {
+            navigate('/dashboard');
+          }
         }
-        
-        toast.success('Email verified!');
-        navigate('/dashboard');
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Invalid OTP');

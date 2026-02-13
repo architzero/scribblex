@@ -223,7 +223,7 @@ export function DrawAvatar({ onDone }: DrawAvatarProps) {
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Colors</label>
         <div className="flex gap-2 flex-wrap">
-          {COLORS.map((color) => (
+          {COLORS.map((c) => (
             <button
               key={c}
               onClick={() => setColor(c)}

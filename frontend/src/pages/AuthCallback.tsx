@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../lib/api';
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -19,8 +20,7 @@ export default function AuthCallback() {
     if (token) {
       localStorage.setItem('accessToken', token);
       
-      // Fetch user data
-      fetch('http://localhost:4000/auth/me', {
+      fetch(`${API_BASE_URL}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -30,7 +30,12 @@ export default function AuthCallback() {
           if (data.success && data.user) {
             localStorage.setItem('user', JSON.stringify(data.user));
             setUser(data.user);
-            navigate('/dashboard');
+            
+            if (!data.user.profileCompleted) {
+              navigate('/complete-profile');
+            } else {
+              navigate('/dashboard');
+            }
           } else {
             navigate('/');
           }

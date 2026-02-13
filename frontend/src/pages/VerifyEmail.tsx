@@ -1,37 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { GridBg } from '../components/GridBg';
-import api from '../lib/api';
+import { Mail } from 'lucide-react';
 
 export default function VerifyEmail() {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('');
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
-
-  useEffect(() => {
-    if (!token) {
-      setStatus('error');
-      setMessage('Invalid verification link');
-      return;
-    }
-
-    const verify = async () => {
-      try {
-        await api.get(`/auth/verify-email?token=${token}`);
-        setStatus('success');
-        setMessage('Email verified successfully!');
-        setTimeout(() => navigate('/dashboard'), 2000);
-      } catch (error: any) {
-        setStatus('error');
-        setMessage(error.response?.data?.message || 'Verification failed');
-      }
-    };
-
-    verify();
-  }, [token, navigate]);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#fafaf9]">
@@ -44,34 +18,19 @@ export default function VerifyEmail() {
           className="w-full max-w-md px-4"
         >
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-8 border border-gray-200 text-center">
-            {status === 'loading' && (
-              <>
-                <div className="text-6xl mb-4">⏳</div>
-                <p className="text-gray-600">Verifying your email...</p>
-              </>
-            )}
-
-            {status === 'success' && (
-              <>
-                <div className="text-6xl mb-4">✅</div>
-                <h2 className="text-2xl font-display mb-2">Email Verified!</h2>
-                <p className="text-gray-600">Redirecting to dashboard...</p>
-              </>
-            )}
-
-            {status === 'error' && (
-              <>
-                <div className="text-6xl mb-4">❌</div>
-                <h2 className="text-2xl font-display mb-2">Verification Failed</h2>
-                <p className="text-gray-600 mb-4">{message}</p>
-                <button
-                  onClick={() => navigate('/')}
-                  className="px-6 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a]"
-                >
-                  Back to Login
-                </button>
-              </>
-            )}
+            <div className="w-16 h-16 bg-[#ff6392]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-[#ff6392]" />
+            </div>
+            <h2 className="text-2xl font-display mb-2">Check Your Email</h2>
+            <p className="text-gray-600 mb-6">
+              We've sent a verification code to your email address. Please check your inbox and enter the code on the verification page.
+            </p>
+            <button
+              onClick={() => navigate('/email-login')}
+              className="px-6 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-[#2a2a2a] transition-colors"
+            >
+              Back to Login
+            </button>
           </div>
         </motion.div>
       </div>

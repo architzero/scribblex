@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import api from '../lib/api';
 
 export default function EditProfile() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
@@ -27,7 +27,13 @@ export default function EditProfile() {
     setLoading(true);
 
     try {
-      await api.put('/user/profile', { name, bio, location });
+      const { data } = await api.put('/user/profile', { name, bio, location });
+      
+      if (data.success && data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
+      }
+      
       toast.success('Profile updated!');
       navigate('/dashboard');
     } catch (error: any) {

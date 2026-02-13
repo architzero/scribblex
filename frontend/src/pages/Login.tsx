@@ -8,6 +8,7 @@ import { Orbs } from '../components/Orbs';
 import { DrawCanvas } from '../components/DrawCanvas';
 import { Particles } from '../components/Particles';
 import { Quote } from '../components/Quote';
+import { API_BASE_URL } from '../lib/api';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -42,7 +43,7 @@ export default function Login() {
   const loginGoogle = () => {
     setLoading(true);
     setTimeout(() => {
-      window.location.href = 'http://localhost:4000/auth/google';
+      window.location.href = `${API_BASE_URL}/auth/google`;
     }, 600);
   };
 
@@ -56,14 +57,14 @@ export default function Login() {
   const loginGithub = () => {
     setLoading(true);
     setTimeout(() => {
-      window.location.href = 'http://localhost:4000/auth/github';
+      window.location.href = `${API_BASE_URL}/auth/github`;
     }, 600);
   };
 
   const loginApple = () => {
     setLoading(true);
     setTimeout(() => {
-      window.location.href = 'http://localhost:4000/auth/apple';
+      window.location.href = `${API_BASE_URL}/auth/apple`;
     }, 600);
   };
 

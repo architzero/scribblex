@@ -202,7 +202,7 @@ export default function CompleteProfile() {
         avatar: avatar,
         bio: bio,
         location: country,
-        dob: dob,
+        dateOfBirth: dob,
         socialLinks: socialLinks
       });
       

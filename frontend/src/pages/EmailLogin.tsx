@@ -21,7 +21,13 @@ export default function EmailLogin() {
       if (isLogin) {
         await login(email, password);
         toast.success('Welcome back!');
-        navigate('/dashboard');
+        
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!user.profileCompleted) {
+          navigate('/complete-profile');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         const response = await signup(email, password);
         if (response.requiresVerification) {
@@ -29,7 +35,7 @@ export default function EmailLogin() {
           navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
         } else {
           toast.success('Account created!');
-          navigate('/dashboard');
+          navigate('/complete-profile');
         }
       }
     } catch (error: any) {

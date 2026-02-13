@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+
 const api = axios.create({
-  baseURL: 'http://localhost:4000',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -26,20 +28,21 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest?.headers) {
       originalRequest._retry = true;
 
       try {
         const { data } = await axios.post(
-          'http://localhost:4000/auth/refresh',
+          `${API_BASE_URL}/auth/refresh`,
           {},
           { withCredentials: true }
         );
         
-        localStorage.setItem('accessToken', data.token);
-        originalRequest.headers.Authorization = `Bearer ${data.token}`;
-        
-        return api(originalRequest);
+        if (data.token) {
+          localStorage.setItem('accessToken', data.token);
+          originalRequest.headers.Authorization = `Bearer ${data.token}`;
+          return api(originalRequest);
+        }
       } catch (refreshError) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
@@ -52,4 +55,5 @@ api.interceptors.response.use(
   }
 );
 
+export { API_BASE_URL };
 export default api;
