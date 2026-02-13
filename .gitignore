@@ -1,10 +1,10 @@
-# dependencies
 node_modules/
-
-# env files
 .env
-.env.*
-
-# build outputs
+.env.local
 dist/
-.next/
+build/
+*.log
+.DS_Store
+.vscode/
+.idea/
+docs/
