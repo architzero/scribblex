@@ -40,7 +40,7 @@ export default function VerifyOTP() {
           if (!userResponse.data.user.profileCompleted) {
             navigate('/complete-profile');
           } else {
-            navigate('/dashboard');
+            navigate('/home');
           }
         }
       }

@@ -6,8 +6,7 @@ async function resetDatabase() {
     console.log('🗑️  Deleting all data...');
     
     // Delete in correct order (respecting foreign keys)
-    await prisma.activity.deleteMany();
-    await prisma.roomMember.deleteMany();
+    await prisma.roomParticipant.deleteMany();
     await prisma.room.deleteMany();
     await prisma.session.deleteMany();
     await prisma.auditLog.deleteMany();

@@ -26,7 +26,7 @@ export default function EmailLogin() {
         if (!user.profileCompleted) {
           navigate('/complete-profile');
         } else {
-          navigate('/dashboard');
+          navigate('/home');
         }
       } else {
         const response = await signup(email, password);

@@ -7,11 +7,13 @@ import EmailLogin from './pages/EmailLogin';
 import AuthCallback from './pages/AuthCallback';
 import CompleteProfile from './pages/CompleteProfile';
 import EditProfile from './pages/EditProfile';
-import Dashboard from './pages/Dashboard';
+import Home from './pages/Home';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import VerifyOTP from './pages/VerifyOTP';
+import RoomTest from './pages/RoomTest';
+import Room from './pages/Room';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -33,7 +35,7 @@ function ProfileRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && user?.profileCompleted) {
-      navigate('/dashboard');
+      navigate('/home');
     }
   }, [user, loading, navigate]);
 
@@ -64,10 +66,26 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route
-            path="/dashboard"
+            path="/home"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <Home />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/room/:id"
+            element={
+              <ProtectedRoute>
+                <Room />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/room-test"
+            element={
+              <ProtectedRoute>
+                <RoomTest />
               </ProtectedRoute>
             }
           />

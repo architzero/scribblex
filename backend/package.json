@@ -25,6 +25,9 @@
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.1",
     "prisma": "^6.19.1",
+    "socket.io": "^4.8.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.29",
     "zod": "^4.3.6"
   },
   "devDependencies": {

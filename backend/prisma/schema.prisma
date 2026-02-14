@@ -21,6 +21,7 @@ model User {
   githubId     String?   @unique
   appleId      String?   @unique
   avatarUrl    String?
+  color        String?   @default("#000000")
   location     String?
   dateOfBirth  DateTime?
   socialLinks  Json?
@@ -44,11 +45,10 @@ model User {
   socialYoutube   String?
   socialWebsite   String?
 
-  roomsOwned   Room[]         @relation("RoomOwner")
-  memberships  RoomMember[]
-  activities   Activity[]
-  sessions     Session[]
-  auditLogs    AuditLog[]
+  roomsCreated     Room[]            @relation("RoomCreator")
+  roomParticipants RoomParticipant[]
+  sessions         Session[]
+  auditLogs        AuditLog[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -100,58 +100,44 @@ model IPLockout {
 }
 
 model Room {
-  id           String       @id @default(uuid())
-  name         String
-  isPublic     Boolean      @default(true)
-  color        String       @default("#6366f1")
+  id           String            @id @default(uuid())
+  title        String
   description  String?
   thumbnail    String?
-  ownerId      String
-  lastActivity DateTime     @default(now())
+  visibility   RoomVisibility    @default(PUBLIC)
+  createdBy    String
+  isActive     Boolean           @default(true)
+  crdtState    Bytes?
+  drawingState Json?             @default("[]")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @default(now()) @updatedAt
 
-  owner        User         @relation("RoomOwner", fields: [ownerId], references: [id])
-  members      RoomMember[]
-  activities   Activity[]
+  creator      User              @relation("RoomCreator", fields: [createdBy], references: [id])
+  participants RoomParticipant[]
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  @@index([createdBy])
+  @@index([visibility])
 }
 
-model RoomMember {
-  id       String   @id @default(uuid())
-  userId   String
-  roomId   String
-  role     Role     @default(MEMBER)
-  isOnline Boolean  @default(false)
-  lastSeen DateTime @default(now())
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, roomId])
-}
-
-model Activity {
-  id        String       @id @default(uuid())
-  type      ActivityType
-  message   String
-  roomId    String?
+model RoomParticipant {
+  roomId    String
   userId    String
+  role      ParticipantRole
+  joinedAt  DateTime        @default(now())
 
-  room      Room?        @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime     @default(now())
+  @@id([roomId, userId])
+  @@index([userId])
 }
 
-enum Role {
-  OWNER
-  MEMBER
+enum RoomVisibility {
+  PUBLIC
+  PRIVATE
 }
 
-enum ActivityType {
-  ROOM_CREATED
-  ROOM_JOINED
-  USER_DRAWING
-  USER_LEFT
+enum ParticipantRole {
+  HOST
+  PARTICIPANT
 }

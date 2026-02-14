@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Grid3x3, List, Lock, Globe, Users, Trash2, Edit2, MoreVertical } from 'lucide-react';
-import axios from 'axios';
+import { Plus, Grid3x3, List, Lock, Globe, Users, Trash2 } from 'lucide-react';
+import api from '../lib/api';
 
 interface Room {
   id: string;
@@ -23,7 +23,7 @@ interface Room {
   };
 }
 
-export default function Dashboard() {
+export default function Home() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,6 @@ export default function Dashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [newRoom, setNewRoom] = useState({ title: '', description: '', visibility: 'PUBLIC' as 'PUBLIC' | 'PRIVATE' });
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRooms();
@@ -39,10 +38,7 @@ export default function Dashboard() {
 
   const fetchRooms = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const { data } = await axios.get(`${import.meta.env.VITE_API_URL}/rooms`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await api.get('/rooms');
       setRooms(data);
     } catch (error) {
       console.error('Failed to fetch rooms:', error);
@@ -55,12 +51,7 @@ export default function Dashboard() {
     if (!newRoom.title.trim()) return;
     setCreateLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_API_URL}/rooms`,
-        newRoom,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const { data } = await api.post('/rooms', newRoom);
       setRooms([data, ...rooms]);
       setShowCreateModal(false);
       setNewRoom({ title: '', description: '', visibility: 'PUBLIC' });
@@ -73,12 +64,9 @@ export default function Dashboard() {
   };
 
   const deleteRoom = async (roomId: string) => {
-    if (!confirm('Delete this room? This cannot be undone.')) return;
+    if (!confirm('Delete this canvas? This cannot be undone.')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${import.meta.env.VITE_API_URL}/rooms/${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.delete(`/rooms/${roomId}`);
       setRooms(rooms.filter(r => r.id !== roomId));
     } catch (error) {
       console.error('Failed to delete room:', error);
@@ -88,7 +76,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -158,7 +146,7 @@ export default function Dashboard() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 whileHover={{ y: -4 }}
-                className="bg-white rounded-2xl border border-black/10 overflow-hidden hover:shadow-xl transition-all cursor-pointer group"
+                className="bg-white rounded-2xl border border-black/10 overflow-hidden hover:shadow-xl transition-all cursor-pointer group relative"
                 onClick={() => navigate(`/room/${room.id}`)}
               >
                 <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 relative">
@@ -182,11 +170,11 @@ export default function Dashboard() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setMenuOpen(menuOpen === room.id ? null : room.id);
+                        deleteRoom(room.id);
                       }}
-                      className="p-1 hover:bg-gray-100 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                      className="p-1 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
                     >
-                      <MoreVertical className="w-4 h-4 text-gray-600" />
+                      <Trash2 className="w-4 h-4 text-red-600" />
                     </button>
                   </div>
                   {room.description && (
@@ -200,32 +188,6 @@ export default function Dashboard() {
                     <div>{new Date(room.updatedAt).toLocaleDateString()}</div>
                   </div>
                 </div>
-                {menuOpen === room.id && (
-                  <div className="absolute right-4 top-48 bg-white rounded-xl shadow-lg border border-black/10 py-2 z-10 min-w-[150px]">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // TODO: Edit modal
-                        setMenuOpen(null);
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteRoom(room.id);
-                        setMenuOpen(null);
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </button>
-                  </div>
-                )}
               </motion.div>
             ))}
           </div>

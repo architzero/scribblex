@@ -1,6 +1,5 @@
 import { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
-import websocket from "@fastify/websocket";
 import oauthPlugin from "@fastify/oauth2";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -31,9 +30,6 @@ export async function registerPlugins(app: FastifyInstance) {
     max: 100,
     timeWindow: "1 minute",
   });
-
-  // WebSocket
-  await app.register(websocket);
 
   // Google OAuth
   await app.register(oauthPlugin, {

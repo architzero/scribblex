@@ -1,344 +1,434 @@
-ScribbleX — Collective Thinking Canvas
-“Not just collaboration. Structured collective intelligence.”
-1️⃣ What Is ScribbleX?
+PROJECT TITLE
+ScribbleX — AI-Structured Real-Time Collaborative Idea Graph
+1. FINAL PROJECT DESCRIPTION
+Overview
 
-ScribbleX is a real-time collaborative thinking platform where multiple users join a shared canvas to brainstorm, sketch, and write ideas together.
+ScribbleX is a real-time collaborative platform built around an infinite, node-based idea graph canvas. It enables multiple users to think, brainstorm, and solve problems visually in a shared space while an AI intelligence layer organizes ideas through semantic clustering and structured summarization.
 
-But unlike Miro, Jamboard, or a normal whiteboard…
+Unlike chat-based systems that produce linear message streams, ScribbleX structures collective thinking spatially. Ideas are represented as interconnected nodes, forming a dynamic graph that evolves over time. The AI layer assists by identifying semantic similarity between ideas, suggesting clusters, and generating structured summaries.
 
-👉 ScribbleX doesn’t just let people draw.
-👉 It understands what’s being written.
-👉 It organizes ideas automatically.
+The platform is designed to prove one core hypothesis:
 
-It adds an AI intelligence layer on top of collaboration.
+AI-assisted real-time idea graphs improve collaborative thinking compared to linear communication tools.
 
-2️⃣ The Core Problem
+Core Value Proposition
 
-When people brainstorm together:
+Escape linear chat constraints.
 
-The board becomes messy
+Visualize thought structures.
 
-Ideas overlap
+Organize chaotic brainstorming automatically.
 
-Topics mix randomly
+Convert visual thinking into structured output.
 
-Important thoughts get buried
+Preserve the evolution of ideas over time.
 
-After the session, the board is unusable
+Target Use Cases
 
-Most collaborative tools are:
+Startup brainstorming sessions
 
-Real-time ✔
+Product requirement mapping
 
-But not intelligent ❌
+Academic group discussions
 
-There is no structure.
+Research collaboration
 
-Once people leave, the board becomes digital garbage.
+Strategy planning
 
-3️⃣ What Makes ScribbleX Different?
+Hackathon ideation
 
-ScribbleX turns:
+2. SYSTEM ARCHITECTURE & DATABASE DESIGN
+High-Level Architecture
 
-Chaotic brainstorming
-into
-Structured collective intelligence
+Frontend:
 
-Instead of a static whiteboard, it becomes a living idea system.
+React-based infinite canvas
 
-4️⃣ How It Works (Conceptually)
+CRDT-based collaborative state (Yjs or Automerge)
 
-Imagine 5 people in a room writing ideas:
+WebSocket connection to backend
 
-User A writes:
+Backend:
 
-“AI for healthcare”
+Node.js / FastAPI API server
 
-User B writes:
+PostgreSQL (relational data)
 
-“ML model for disease detection”
+pgvector extension for embedding storage
 
-User C writes:
+Redis (optional, for presence and pub/sub)
 
-“Hospital automation system”
+AI Microservice:
 
-Normally:
-All of this is random text on a board.
+Sentence-BERT (or similar embedding model)
 
-In ScribbleX:
-The system detects that these ideas are semantically related.
+Clustering algorithm (DBSCAN or K-Means)
 
-It automatically:
+Summarization model
 
-Clusters them visually
+Core Architectural Decisions
 
-Labels the cluster as “Healthcare AI”
+Relational database for metadata.
 
-Groups them spatially
+Vector storage inside PostgreSQL using pgvector.
 
-Suggests connections
+CRDT for conflict-free real-time editing.
 
-The canvas evolves.
+AI is suggestive, not authoritative.
 
-5️⃣ Core Features (Detailed)
-🔴 1. Live Multi-User Canvas
+Clustering is asynchronous and batched.
 
-Real-time drawing
+DATABASE DESIGN (V1)
+1. Users
 
-Real-time typing
+users
 
-WebSocket-powered updates
+id (PK)
 
-Low-latency synchronization
+name
 
-Users can:
+email
 
-Draw strokes
+password_hash
 
-Add sticky notes
+created_at
 
-Move elements
+last_active
 
-Connect ideas
+2. Rooms
 
-🟢 2. Room-Based Collaboration
+rooms
 
-Users create or join rooms
+id (PK)
 
-Each room has:
+title
 
-Owner
+description
 
-Members
+visibility (public/private)
 
-Public/private toggle
+created_by (FK → users.id)
 
-JWT-authenticated access
+created_at
 
-Role-based control
+is_active
 
-This allows:
+3. Room Participants
 
-Team brainstorming
+room_participants
 
-Classroom collaboration
+room_id (FK → rooms.id)
 
-Hackathon planning
+user_id (FK → users.id)
 
-🔵 3. Automatic Idea Clustering (ML Layer)
+role (host/participant)
 
-This is the heart of the project.
+joined_at
 
-When text is added:
+Composite Primary Key: (room_id, user_id)
 
-Convert text → embedding (Sentence-BERT)
+4. Nodes
 
-Compare semantic similarity
+nodes
 
-Apply clustering (K-means / DBSCAN)
+id (PK)
 
-Group similar thoughts
+room_id (FK → rooms.id)
 
-Example:
+created_by (FK → users.id)
 
-“Startup funding”
-“Seed capital”
-“Angel investors”
+content (text)
 
+tag_type (nullable)
 
-System clusters them under:
-“Funding”
+x_position
 
-🟣 4. Theme Detection & Highlighting
+y_position
 
-The system:
+vote_count
 
-Detects dominant topics in the room
+embedding VECTOR(384 or 768) ← pgvector
 
-Highlights emerging themes
+cluster_id (nullable FK → clusters.id)
 
-Suggests labels
+created_at
 
-Adjusts color coding dynamically
+updated_at
 
-The canvas becomes self-organizing.
+5. Edges
 
-🟡 5. Ephemeral vs Persistent Rooms
+edges
 
-Two room types:
+id (PK)
 
-Ephemeral
+room_id (FK → rooms.id)
 
-Temporary
+from_node_id (FK → nodes.id)
 
-Auto-deletes after inactivity
+to_node_id (FK → nodes.id)
 
-Useful for quick brainstorming
+6. Clusters
 
-Persistent
+clusters
 
-Saved in database
+id (PK)
 
-Version history
+room_id (FK → rooms.id)
 
-Reopen anytime
+label
 
-Idea evolution tracking
+summary
 
-6️⃣ ML & Intelligence Layer (Technical Depth)
+created_at
 
-This is where your project becomes final-year level.
+7. Snapshots
 
-✨ Semantic Embeddings
+snapshots
 
-Using:
+id (PK)
 
-Sentence-BERT
+room_id (FK → rooms.id)
 
-OpenAI embeddings
+summary
 
-Local embedding model
+created_at
 
-Transforms text into vector space.
+Vector Search Setup
 
-✨ Spatial Clustering
+Enable pgvector:
 
-Combines:
+CREATE EXTENSION vector;
 
-Text similarity
+Embedding column:
 
-Canvas position
+embedding VECTOR(384);
 
-Temporal proximity
+Index:
 
-To determine:
-Which ideas belong together.
+CREATE INDEX ON nodes USING ivfflat (embedding vector_cosine_ops);
 
-✨ Topic Modeling
+This enables fast semantic similarity search.
 
-Uses:
+REAL-TIME COLLABORATION DESIGN
 
-LDA
+CRDT Layer:
 
-BERTopic
+Shared document per room.
 
-HDBSCAN clustering
+Nodes and edges stored in CRDT state.
 
-To extract dominant themes.
+Server acts as awareness + persistence layer.
 
-✨ Temporal Decay
+On interval, CRDT state serialized into database.
 
-Old inactive ideas:
+This prevents:
 
-Fade visually
+Race conditions
 
-Lose cluster priority
+Node overwrite conflicts
 
-De-prioritize over time
+Edge duplication issues
 
-So canvas reflects current thinking.
+AI PIPELINE (V1)
 
-7️⃣ System Architecture (Your Actual Stack)
-🖥 Frontend
+Trigger conditions:
 
-React
+Node count > threshold
 
-Canvas API or WebGL
+Host clicks “Analyze”
 
-WebSocket client
+Time interval reached
 
-Minimal, Gen-Z aesthetic UI
+Steps:
 
-Handles:
+Fetch node embeddings from pgvector.
 
-Drawing
+Perform clustering (approximate nearest neighbor + DBSCAN).
 
-Idea creation
+Create cluster entries.
 
-Real-time updates
+Assign cluster_id to nodes.
 
-Visual clustering
+Generate cluster label + summary.
 
-⚙ Backend
+Return cluster suggestions to frontend.
 
-Fastify (Node.js)
+Frontend displays ghost bounding boxes.
 
-WebSockets
+Host confirms application.
 
-JWT authentication
+AI never force-moves nodes automatically.
 
-Room management
+VERSION 1.0 (STRICT FOCUS)
+Objective:
 
-Prisma ORM
+Prove that multiplayer AI-structured idea graphs improve collaboration.
 
-Neon PostgreSQL
+V1 Feature Set
 
-Handles:
+Authentication
 
-Auth
+Room creation via shareable link
 
-Room system
+Multiplayer infinite canvas
 
-Real-time broadcast
+Node creation
 
-Data persistence
+Dragging nodes
 
-🤖 ML Layer
+Manual connections (edges)
 
-Separate service:
+Node voting
 
-Python FastAPI
+CRDT-based sync
 
-Sentence-BERT
+Embedding generation
 
-Clustering algorithms
+Suggestive clustering
 
-Embedding similarity search
+Cluster summarization
 
-Backend communicates with ML service via API.
+Timeline playback (basic)
 
-🗄 Database
+Graph-to-linear export (AI summary to structured text)
 
-PostgreSQL (persistent rooms, users)
+V1 Exclusions
 
-Redis (optional real-time pub/sub scaling)
+Social feed
 
-8️⃣ Why This Is a Strong Final-Year Project
+Follow system
 
-Because it combines:
+Public discovery
 
-Real-time systems
+Skill-based matching
 
-WebSockets
+Persistent communities
 
-Database modeling
+Reputation scoring
 
-Authentication flow
+Complex moderation tools
 
-ML embeddings
+Keep it lean.
 
-Clustering algorithms
+VERSION 2.0 (PLATFORM EXPANSION)
 
-UI/UX design
+After V1 stability.
 
-Distributed architecture thinking
+1. Social Graph Layer
 
-It’s not just CRUD.
+Friend requests
 
-It’s system-level engineering.
+User profiles
 
-9️⃣ Product Vision
+Room invites
 
-Long term:
+Activity presence
 
-ScribbleX could evolve into:
+2. Skill-Based Matching System
 
-AI-powered brainstorming tool
+New Tables:
 
-Research collaboration platform
+skills
 
-Startup ideation board
+id (PK)
 
-Classroom intelligent whiteboard
+name
 
-Collective knowledge builder
+user_skills
+
+user_id
+
+skill_id
+
+proficiency
+
+Matching Algorithm:
+
+MatchScore =
+Skill overlap +
+Topic similarity (embedding comparison) +
+Participation similarity
+
+Use Cases:
+
+Suggest collaborators
+
+Suggest rooms
+
+Balance team composition
+
+3. Community Mode
+
+Rooms can be stabilized.
+
+Add:
+
+room_followers
+
+room_id
+
+user_id
+
+Persistent idea graphs.
+Snapshot history.
+Cluster indexing.
+
+4. Advanced AI Features
+
+Conflict detection
+
+Node similarity merge suggestions
+
+Contribution analysis
+
+Smart summarization over time
+
+Auto-topic extraction
+
+5. Advanced UX
+
+Smooth graph animation
+
+Role-based permissions
+
+Moderation tools
+
+Performance optimizations
+
+DEVELOPMENT PHASE STRATEGY
+
+Month 1:
+
+CRDT + Canvas
+
+Real-time stable sync
+
+Node & edge management
+
+Month 2:
+
+Embedding pipeline
+
+Clustering engine
+
+Ghost clustering UX
+
+Month 3:
+
+Playback
+
+Export
+
+Performance tuning
+
+Testing & polish
+
+FINAL POSITIONING
+
+V1 is:
+
+An AI-assisted multiplayer idea graph engine.
+
+V2 becomes:
+
+A social collaborative intelligence platform

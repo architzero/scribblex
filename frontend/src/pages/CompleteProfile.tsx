@@ -17,6 +17,52 @@ const socialPlatforms = [
 
 const AVATAR_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF8B94', '#C7CEEA', '#B4A7D6', '#95E1D3'];
 
+const getRandomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+
+const getSocialUrl = (platform: string, username: string) => {
+  const urls: Record<string, string> = {
+    instagram: `https://instagram.com/${username}`,
+    github: `https://github.com/${username}`,
+    linkedin: `https://linkedin.com/in/${username}`,
+    discord: username,
+    snapchat: `https://snapchat.com/add/${username}`
+  };
+  return urls[platform] || '#';
+};
+
+const calculateAge = (birthDate: string): number => {
+  const birth = new Date(birthDate);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+const validateDateOfBirth = (dob: string): { valid: boolean; error?: string } => {
+  if (!dob) return { valid: false, error: 'Date of birth is required' };
+  
+  const selectedDate = new Date(dob);
+  const today = new Date();
+  const minDate = new Date('1900-01-01');
+  
+  if (selectedDate > today) {
+    return { valid: false, error: 'Date cannot be in the future' };
+  }
+  if (selectedDate < minDate) {
+    return { valid: false, error: 'Please enter a valid date after 1900' };
+  }
+  
+  const age = calculateAge(dob);
+  if (age < 8) {
+    return { valid: false, error: 'You must be at least 8 years old' };
+  }
+  
+  return { valid: true };
+};
+
 export default function CompleteProfile() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -24,10 +70,12 @@ export default function CompleteProfile() {
   const [loading, setLoading] = useState(false);
   
   const [avatar, setAvatar] = useState('');
-  const [avatarColor, setAvatarColor] = useState('#000000');
+  const [avatarColor, setAvatarColor] = useState(getRandomColor());
+  const [dobError, setDobError] = useState('');
   const [socialLinks, setSocialLinks] = useState<Array<{platform: string, url: string}>>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [loadingCountries, setLoadingCountries] = useState(true);
+  const [countrySearch, setCountrySearch] = useState('');
   
   const [showPresetAvatars, setShowPresetAvatars] = useState(false);
   const [usernameChecking, setUsernameChecking] = useState(false);
@@ -120,7 +168,14 @@ export default function CompleteProfile() {
       setCurrentStep('country');
     } else if (currentStep === 'country' && formData.country) {
       setCurrentStep('dob');
-    } else if (currentStep === 'dob' && formData.dob) {
+    } else if (currentStep === 'dob') {
+      const validation = validateDateOfBirth(formData.dob);
+      if (!validation.valid) {
+        setDobError(validation.error || '');
+        toast.error(validation.error);
+        return;
+      }
+      setDobError('');
       setCurrentStep('bio');
     } else if (currentStep === 'bio') {
       setCurrentStep('social');
@@ -255,7 +310,7 @@ export default function CompleteProfile() {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         setUser(response.data.user);
         toast.success('Profile created! Welcome to ScribbleX 🎉');
-        setTimeout(() => navigate('/dashboard'), 1000);
+        setTimeout(() => navigate('/home'), 1000);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to complete profile');
@@ -426,7 +481,19 @@ export default function CompleteProfile() {
                       )}
                     </div>
                   </div>
-                  <button onClick={goToNextStep} onKeyDown={(e) => e.key === 'Enter' && goToNextStep()} className="text-sm text-gray-400 hover:text-gray-900 font-medium transition-colors">Continue →</button>
+                  <button 
+                    onClick={goToNextStep}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        goToNextStep();
+                      }
+                    }}
+                    className="text-sm text-gray-400 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    Continue →
+                  </button>
                 </motion.div>
               )}
 
@@ -486,26 +553,55 @@ export default function CompleteProfile() {
                         <span>Loading countries...</span>
                       </div>
                     ) : (
-                      <select 
-                        value={formData.country} 
-                        onChange={(e) => { 
-                          setFormData({ ...formData, country: e.target.value }); 
-                        }} 
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && formData.country) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            goToNextStep();
-                          }
-                        }}
-                        className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none" 
-                        autoFocus
-                      >
-                        <option value="">Select country...</option>
-                        {countries.map(c => (
-                          <option key={c.code} value={c.name}>{c.name}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={countrySearch || formData.country}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setCountrySearch(value);
+                            // Clear country if user is typing
+                            if (value && formData.country) {
+                              setFormData({ ...formData, country: '' });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              // If country already selected, go to next step
+                              if (formData.country) {
+                                goToNextStep();
+                              }
+                              // If searching and has results, select first one
+                              else if (countrySearch && filteredCountries.length > 0) {
+                                setFormData({ ...formData, country: filteredCountries[0].name });
+                                setCountrySearch('');
+                              }
+                            }
+                          }}
+                          placeholder="Search country..."
+                          className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none placeholder:text-gray-300"
+                          autoFocus
+                        />
+                        {countrySearch && filteredCountries.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-white border-2 border-gray-200 rounded-lg shadow-lg z-10">
+                            {filteredCountries.slice(0, 10).map((c) => (
+                              <button
+                                key={c.code}
+                                onClick={() => {
+                                  setFormData({ ...formData, country: c.name });
+                                  setCountrySearch('');
+                                }}
+                                className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                              >
+                                <img src={c.flag} alt={c.code} className="w-6 h-4 object-cover rounded" />
+                                <span className="text-lg">{c.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   <button onClick={goToNextStep} disabled={!formData.country} className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 font-medium transition-colors">Press Enter ↵</button>
@@ -517,10 +613,14 @@ export default function CompleteProfile() {
                   <div>
                     <div className="text-4xl font-light mb-6 text-gray-200">05</div>
                     <h2 className="text-3xl mb-4 font-medium">When's your birthday?</h2>
+                    <p className="text-sm text-gray-500 mb-4">You must be at least 8 years old</p>
                     <input 
                       type="date" 
                       value={formData.dob} 
-                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })} 
+                      onChange={(e) => {
+                        setFormData({ ...formData, dob: e.target.value });
+                        setDobError('');
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && formData.dob) {
                           e.preventDefault();
@@ -528,10 +628,12 @@ export default function CompleteProfile() {
                           goToNextStep();
                         }
                       }}
+                      min="1900-01-01"
                       max={new Date().toISOString().split('T')[0]} 
-                      className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none" 
+                      className={`text-2xl w-full bg-transparent border-0 border-b-2 pb-2 outline-none transition-colors ${dobError ? 'border-red-500' : 'border-gray-900'}`}
                       autoFocus 
                     />
+                    {dobError && <p className="text-sm text-red-500 mt-2">{dobError}</p>}
                   </div>
                   <button onClick={goToNextStep} disabled={!formData.dob} className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 font-medium transition-colors">Press Enter ↵</button>
                 </motion.div>
@@ -582,7 +684,7 @@ export default function CompleteProfile() {
                             <button
                               key={platform.value}
                               onClick={() => startEditingSocial(platform.value)}
-                              className="w-full px-4 py-3 bg-white hover:bg-gray-50 rounded-xl flex items-center gap-3 text-left transition-all border border-black/5 hover:border-black/20 hover:shadow-md"
+                              className="w-full px-4 py-3 bg-white hover:bg-gray-50 rounded-xl flex items-center gap-3 text-left transition-all border border-black/10 hover:border-black/20 hover:shadow-md"
                             >
                               <Icon className="w-5 h-5 text-gray-600" />
                               <div className="flex-1">
@@ -607,7 +709,7 @@ export default function CompleteProfile() {
                             value={editSocialUrl}
                             onChange={(e) => setEditSocialUrl(e.target.value)}
                             placeholder={socialPlatforms.find(p => p.value === editingSocial)?.placeholder}
-                            className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:border-gray-900"
+                            className="flex-1 px-4 py-2 text-sm rounded-lg border-2 border-gray-200 bg-white focus:outline-none focus:border-gray-900 transition-colors"
                             autoFocus
                             onKeyDown={(e) => e.key === 'Enter' && saveSocialLink()}
                           />
@@ -644,26 +746,20 @@ export default function CompleteProfile() {
                     {(showAllSocials ? socialLinks : socialLinks.slice(0, 3)).map((link, index) => {
                       const platform = socialPlatforms.find(p => p.value === link.platform);
                       const Icon = platform?.icon || Github;
-                      const getUrl = (platform: string, username: string) => {
-                        const urls: Record<string, string> = {
-                          instagram: `https://instagram.com/${username}`,
-                          github: `https://github.com/${username}`,
-                          linkedin: `https://linkedin.com/in/${username}`,
-                          discord: username, // Discord usernames don't have direct URLs
-                          snapchat: `https://snapchat.com/add/${username}`
-                        };
-                        return urls[platform] || '#';
-                      };
                       return (
                         <motion.a
-                          key={index}
-                          href={getUrl(link.platform, link.url)}
+                          key={link.platform}
+                          href={getSocialUrl(link.platform, link.url)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          whileHover={{ scale: 1.2, rotate: 5, zIndex: 10 }}
+                          aria-label={`Visit ${platform?.label || link.platform} profile`}
+                          whileHover={{ scale: 1.15, y: -2, zIndex: 50 }}
                           whileTap={{ scale: 0.95 }}
-                          className="w-9 h-9 flex items-center justify-center rounded-full border-2 border-white bg-gray-100 hover:bg-white transition-all cursor-pointer shadow-sm"
-                          style={{ zIndex: socialLinks.length - index }}
+                          className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-all cursor-pointer relative"
+                          style={{ 
+                            zIndex: socialLinks.length - index,
+                            border: `2px solid ${avatar ? `${avatarColor}20` : 'white'}`
+                          }}
                         >
                           <Icon className="w-5 h-5 text-gray-600" />
                         </motion.a>
@@ -671,9 +767,15 @@ export default function CompleteProfile() {
                     })}
                     {socialLinks.length > 3 && (
                       <motion.div
-                        whileHover={{ scale: 1.2, zIndex: 10 }}
+                        whileHover={{ scale: 1.15, y: -2, zIndex: 50 }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => setShowAllSocials(!showAllSocials)}
-                        className="w-9 h-9 flex items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white text-xs font-bold cursor-pointer shadow-sm"
+                        aria-label={showAllSocials ? 'Show less social links' : `Show ${socialLinks.length - 3} more social links`}
+                        className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold cursor-pointer transition-all relative"
+                        style={{ 
+                          zIndex: 0,
+                          border: `2px solid ${avatar ? `${avatarColor}30` : 'white'}`
+                        }}
                       >
                         {showAllSocials ? '−' : `+${socialLinks.length - 3}`}
                       </motion.div>

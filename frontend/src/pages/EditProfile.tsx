@@ -35,7 +35,7 @@ export default function EditProfile() {
       }
       
       toast.success('Profile updated!');
-      navigate('/dashboard');
+      navigate('/home');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to update profile');
     } finally {
@@ -47,11 +47,11 @@ export default function EditProfile() {
     <div className="min-h-screen bg-[#fafaf9] p-6">
       <div className="max-w-2xl mx-auto">
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/home')}
           className="flex items-center gap-2 text-[#666666] hover:text-[#1a1a1a] mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Dashboard
+          Back to Home
         </button>
 
         <motion.div
