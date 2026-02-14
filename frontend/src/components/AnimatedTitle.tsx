@@ -43,7 +43,7 @@ export function AnimatedTitle({ noFlicker }: { noFlicker?: boolean }) {
   const letters = 'ScribbleX'.split('');
 
   return (
-    <span className="inline-flex tracking-wider">
+    <span className="inline-flex tracking-[0.02em]">
       {letters.map((letter, index) => (
         <Letter
           key={index}

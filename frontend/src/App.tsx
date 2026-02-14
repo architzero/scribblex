@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'sonner';
 import Login from './pages/Login';
@@ -27,6 +27,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/" />;
 }
 
+function ProfileRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user?.profileCompleted) {
+      navigate('/dashboard');
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -37,7 +58,7 @@ function App() {
           <Route path="/email-login" element={<EmailLogin />} />
           <Route path="/verify-otp" element={<VerifyOTP />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/complete-profile" element={<CompleteProfile />} />
+          <Route path="/complete-profile" element={<ProfileRoute><CompleteProfile /></ProfileRoute>} />
           <Route path="/edit-profile" element={<EditProfile />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />

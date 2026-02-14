@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check } from 'lucide-react';
+import { Upload, Sparkles, Check, X, Instagram, Github, Linkedin, MessageCircle, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { fetchCountries, generateSmartUsernameSuggestions, type Country } from '../utils/profileUtils';
+
+const socialPlatforms = [
+  { value: 'instagram', label: 'Instagram', icon: Instagram, placeholder: 'username' },
+  { value: 'discord', label: 'Discord', icon: MessageCircle, placeholder: 'username#1234' },
+  { value: 'github', label: 'GitHub', icon: Github, placeholder: 'username' },
+  { value: 'snapchat', label: 'Snapchat', icon: Send, placeholder: 'username' },
+  { value: 'linkedin', label: 'LinkedIn', icon: Linkedin, placeholder: 'username' },
+];
 
 const AVATAR_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF', '#FF8B94', '#C7CEEA', '#B4A7D6', '#95E1D3'];
 
@@ -13,7 +21,26 @@ export default function CompleteProfile() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setUser } = useAuth();
+  const [loading, setLoading] = useState(false);
   
+  const [avatar, setAvatar] = useState('');
+  const [avatarColor, setAvatarColor] = useState('#000000');
+  const [socialLinks, setSocialLinks] = useState<Array<{platform: string, url: string}>>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [loadingCountries, setLoadingCountries] = useState(true);
+  
+  const [showPresetAvatars, setShowPresetAvatars] = useState(false);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
+  const [showSocialDropdown, setShowSocialDropdown] = useState(false);
+  const [editingSocial, setEditingSocial] = useState<string | null>(null);
+  const [editSocialUrl, setEditSocialUrl] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [showAllSocials, setShowAllSocials] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  
+  const [currentStep, setCurrentStep] = useState<'name' | 'avatar' | 'username' | 'country' | 'dob' | 'bio' | 'social' | 'done'>('name');
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -23,22 +50,31 @@ export default function CompleteProfile() {
     dob: '',
   });
 
-  const [currentStep, setCurrentStep] = useState<'name' | 'username' | 'country' | 'dob' | 'bio' | 'done'>('name');
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [loadingCountries, setLoadingCountries] = useState(true);
-  const [usernameChecking, setUsernameChecking] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
-  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const initials = formData.name
+    .split(' ')
+    .filter(n => n.length > 0)
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  const joinDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
   useEffect(() => {
     const token = searchParams.get('token');
     if (token) localStorage.setItem('accessToken', token);
     
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.email) setUserEmail(user.email);
+    
     fetchCountries().then(data => {
+      console.log('Fetched countries:', data.length);
       setCountries(data);
       setLoadingCountries(false);
-    }).catch(() => setLoadingCountries(false));
+    }).catch(err => {
+      console.error('Error fetching countries:', err);
+      setLoadingCountries(false);
+    });
   }, [searchParams]);
 
   useEffect(() => {
@@ -58,8 +94,7 @@ export default function CompleteProfile() {
           setUsernameSuggestions([]);
         }
       } catch (error) {
-        console.error('Username check failed:', error);
-        setUsernameAvailable(true);
+        setUsernameAvailable(null);
         setUsernameSuggestions([]);
       } finally {
         setUsernameChecking(false);
@@ -70,19 +105,16 @@ export default function CompleteProfile() {
     return () => clearTimeout(timer);
   }, [formData.username, formData.name]);
 
-  const initials = formData.name
-    .split(' ')
-    .filter(n => n.length > 0)
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const filteredCountries = countries.filter(c => 
+    c.name.toLowerCase().includes(countrySearch.toLowerCase())
+  );
 
   const selectedCountry = countries.find(c => c.name === formData.country);
-  const joinDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
   const goToNextStep = () => {
     if (currentStep === 'name' && formData.name.trim()) {
+      setCurrentStep('avatar');
+    } else if (currentStep === 'avatar') {
       setCurrentStep('username');
     } else if (currentStep === 'username' && formData.username && formData.username.length >= 3) {
       setCurrentStep('country');
@@ -91,45 +123,139 @@ export default function CompleteProfile() {
     } else if (currentStep === 'dob' && formData.dob) {
       setCurrentStep('bio');
     } else if (currentStep === 'bio') {
+      setCurrentStep('social');
+    } else if (currentStep === 'social') {
       handleSubmit();
     }
   };
 
   const handleBack = () => {
-    if (currentStep === 'username') setCurrentStep('name');
+    if (currentStep === 'avatar') setCurrentStep('name');
+    else if (currentStep === 'username') setCurrentStep('avatar');
     else if (currentStep === 'country') setCurrentStep('username');
     else if (currentStep === 'dob') setCurrentStep('country');
     else if (currentStep === 'bio') setCurrentStep('dob');
+    else if (currentStep === 'social') setCurrentStep('bio');
+  };
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imgUrl = event.target?.result as string;
+        setAvatar(imgUrl);
+        setShowPresetAvatars(false);
+        
+        // Extract dominant color from image
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 100;
+            canvas.height = 100;
+            ctx?.drawImage(img, 0, 0, 100, 100);
+            const imageData = ctx?.getImageData(0, 0, 100, 100);
+            if (imageData) {
+              let r = 0, g = 0, b = 0, count = 0;
+              for (let i = 0; i < imageData.data.length; i += 40) {
+                r += imageData.data[i];
+                g += imageData.data[i + 1];
+                b += imageData.data[i + 2];
+                count++;
+              }
+              r = Math.floor(r / count);
+              g = Math.floor(g / count);
+              b = Math.floor(b / count);
+              setAvatarColor(`rgb(${r}, ${g}, ${b})`);
+            }
+          } catch (err) {
+            console.log('Color extraction failed, using default');
+            setAvatarColor('#4ECDC4');
+          }
+        };
+        img.onerror = () => {
+          setAvatarColor('#4ECDC4');
+        };
+        img.src = imgUrl;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const startEditingSocial = (platform: string) => {
+    const current = socialLinks.find(l => l.platform === platform);
+    setEditingSocial(platform);
+    setEditSocialUrl(current?.url || '');
+    setShowSocialDropdown(false);
+  };
+
+  const saveSocialLink = () => {
+    if (editSocialUrl.trim() && editingSocial) {
+      const exists = socialLinks.find(l => l.platform === editingSocial);
+      if (exists) {
+        setSocialLinks(socialLinks.map(l => l.platform === editingSocial ? { ...l, url: editSocialUrl.trim() } : l));
+      } else {
+        setSocialLinks([...socialLinks, { platform: editingSocial, url: editSocialUrl.trim() }]);
+      }
+      setEditingSocial(null);
+      setEditSocialUrl('');
+      toast.success('Social link added!');
+    }
+  };
+
+  const cancelEditingSocial = () => {
+    setEditingSocial(null);
+    setEditSocialUrl('');
   };
 
   const handleSubmit = async () => {
-    const birthDate = new Date(formData.dob);
-    const today = new Date();
-    const age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) ? age - 1 : age;
-    
-    if (actualAge < 13) {
-      toast.error('You must be at least 13 years old');
+    if (!formData.name.trim()) {
+      toast.error('Please enter your name');
       return;
     }
 
+    if (!formData.username.trim() || formData.username.length < 3) {
+      toast.error('Username must be at least 3 characters');
+      return;
+    }
+
+    if (usernameAvailable === false) {
+      toast.error('Username is already taken');
+      return;
+    }
+
+    if (!formData.country) {
+      toast.error('Please select your country');
+      return;
+    }
+
+    setShowConfirmation(true);
+  };
+
+  const confirmAndCreate = async () => {
+    setShowConfirmation(false);
     setLoading(true);
     try {
+      const finalAvatar = avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=${formData.color.slice(1)}&color=fff&size=200`;
+      
       const response = await api.post('/user/complete-profile', {
         name: formData.name,
         username: formData.username,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=${formData.color.slice(1)}&color=fff&size=200`,
+        avatar: finalAvatar,
         bio: formData.bio,
         location: formData.country,
-        dateOfBirth: formData.dob,
-        socialLinks: []
+        dob: formData.dob,
+        socialLinks: socialLinks
       });
       
       if (response.data.success && response.data.user) {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         setUser(response.data.user);
-        setCurrentStep('done');
+        toast.success('Profile created! Welcome to ScribbleX 🎉');
+        setTimeout(() => navigate('/dashboard'), 1000);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to complete profile');
@@ -138,8 +264,15 @@ export default function CompleteProfile() {
     }
   };
 
+  const canSubmit = formData.name.trim() && 
+                    formData.username.trim().length >= 3 && 
+                    formData.username !== formData.name.toLowerCase().replace(/\s+/g, '') &&
+                    usernameAvailable === true && 
+                    formData.country &&
+                    formData.dob;
+
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute inset-0 opacity-[0.03]" style={{
         backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`,
         backgroundSize: '24px 24px',
@@ -157,22 +290,29 @@ export default function CompleteProfile() {
       <div className="w-full max-w-5xl relative z-10">
         <div className="grid md:grid-cols-2 gap-20 items-center">
           
-          <div>
-            {currentStep !== 'name' && currentStep !== 'done' && (
-              <button onClick={handleBack} className="mb-8 text-gray-400 hover:text-gray-600 flex items-center gap-2 text-sm">
-                ← Back
-              </button>
-            )}
+          <div className="relative">
+            <div className="absolute top-0 left-0">
+              {currentStep !== 'name' && currentStep !== 'done' && (
+                <motion.button 
+                  onClick={handleBack} 
+                  whileHover={{ x: -3 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="text-gray-400 hover:text-gray-900 flex items-center gap-2 text-sm font-medium transition-colors"
+                >
+                  ← Back
+                </motion.button>
+              )}
+            </div>
 
-            <div className="mb-20">
+            <div className="mb-20 mt-12">
               <div className="flex items-center gap-3">
-                <svg width="44" height="44" viewBox="0 0 32 32" fill="none">
+                <svg width="33" height="33" viewBox="0 0 32 32" fill="none">
                   <path d="M8 4 Q 4 4, 4 8 L 4 24 Q 4 28, 8 28 L 24 28 Q 28 28, 28 24 L 28 8 Q 28 4, 24 4 Z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
                   <path d="M 10 16 Q 12 10, 16 12 T 22 16" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
                 </svg>
                 <div>
-                  <div className="font-bold text-2xl tracking-tight leading-none">ScribbleX</div>
-                  <div className="text-[10px] text-gray-600 tracking-[0.2em] font-bold mt-1.5">CREATE YOUR PROFILE</div>
+                  <div className="font-bold text-xl tracking-tight leading-none font-display">ScribbleX</div>
+                  <div className="text-[9px] text-gray-500 tracking-[0.15em] font-semibold mt-1.5">COMPLETE YOUR PROFILE</div>
                 </div>
               </div>
             </div>
@@ -181,38 +321,129 @@ export default function CompleteProfile() {
               {currentStep === 'name' && (
                 <motion.div key="name" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
                   <div>
-                    <div className="text-4xl font-light mb-6 text-gray-200">01</div>
-                    <h2 className="text-3xl mb-4 font-medium">What's your name?</h2>
+                    <div className="text-3xl font-light mb-6 text-gray-200">01</div>
+                    {userEmail && (
+                      <div className="mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-xs text-gray-500 mb-1">Email</p>
+                        <p className="text-sm text-gray-700 font-medium">{userEmail}</p>
+                      </div>
+                    )}
+                    <h2 className="text-2xl mb-4 font-medium">What's your name?</h2>
                     <input 
                       type="text" 
                       value={formData.name} 
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
-                      onKeyPress={(e) => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter' && formData.name.trim()) {
+                          e.preventDefault();
+                          e.stopPropagation();
                           goToNextStep();
                         }
                       }}
-                      className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none placeholder:text-gray-300" 
+                      className="text-xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none placeholder:text-gray-300" 
                       placeholder="Type here..." 
                       autoFocus 
                     />
                   </div>
-                  <button onClick={goToNextStep} disabled={!formData.name.trim()} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Press Enter ↵</button>
+                  <button onClick={goToNextStep} disabled={!formData.name.trim()} className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 font-medium transition-colors">Press Enter ↵</button>
+                </motion.div>
+              )}
+
+              {currentStep === 'avatar' && (
+                <motion.div key="avatar" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-3xl font-light mb-6 text-gray-200">02</div>
+                    <h2 className="text-2xl mb-4 font-medium">Choose your avatar</h2>
+                    
+                    <div className="flex flex-col items-center gap-6">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-200 shadow-lg">
+                        {avatar ? (
+                          <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-white" style={{ backgroundColor: formData.color }}>
+                            {initials || '?'}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-3">
+                        <input type="file" id="avatar-upload" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                        <button 
+                          onClick={() => document.getElementById('avatar-upload')?.click()} 
+                          className="px-4 py-2 rounded-full border border-black/10 bg-white text-sm font-medium hover:border-black hover:shadow-md transition-all flex items-center gap-2"
+                        >
+                          <Upload className="w-4 h-4" />Upload
+                        </button>
+                        <button 
+                          onClick={() => { setShowPresetAvatars(!showPresetAvatars); }} 
+                          className="px-4 py-2 rounded-full border border-black/10 bg-white text-sm font-medium hover:border-black hover:shadow-md transition-all flex items-center gap-2"
+                        >
+                          <Sparkles className="w-4 h-4" />Presets
+                        </button>
+                      </div>
+
+                      {avatar && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-500">Accent color:</span>
+                          <input 
+                            type="color" 
+                            value={avatarColor} 
+                            onChange={(e) => setAvatarColor(e.target.value)} 
+                            className="w-10 h-10 rounded-full cursor-pointer border-2 border-gray-200 hover:border-gray-400 transition-all"
+                          />
+                        </div>
+                      )}
+
+                      {showPresetAvatars && (
+                        <div className="grid grid-cols-5 gap-3 w-full">
+                          {[
+                            'https://api.dicebear.com/9.x/bottts/svg?seed=Midnight&backgroundColor=b6e3f4',
+                            'https://api.dicebear.com/9.x/avataaars/svg?seed=Felix&backgroundColor=c0aede',
+                            'https://api.dicebear.com/9.x/lorelei/svg?seed=Luna&backgroundColor=ffd5dc',
+                            'https://api.dicebear.com/9.x/adventurer/svg?seed=Max&backgroundColor=ffdfbf',
+                            'https://api.dicebear.com/9.x/big-smile/svg?seed=Happy&backgroundColor=d1d4f9',
+                            'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Dragon&backgroundColor=b6e3f4',
+                            'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=Robot&backgroundColor=c0aede',
+                            'https://api.dicebear.com/9.x/pixel-art/svg?seed=Gamer&backgroundColor=ffd5dc',
+                            'https://api.dicebear.com/9.x/thumbs/svg?seed=Cool&backgroundColor=ffdfbf',
+                            'https://api.dicebear.com/9.x/notionists/svg?seed=Smart&backgroundColor=d1d4f9',
+                          ].map((url, index) => (
+                            <button 
+                              key={index}
+                              onClick={() => { 
+                                setAvatar(url); 
+                                setShowPresetAvatars(false);
+                                // Generate color from URL seed
+                                const colors = ['#4ECDC4', '#FF6B6B', '#FFE66D', '#A8E6CF', '#FF8B94', '#C7CEEA', '#B4A7D6', '#95E1D3', '#FECA57', '#48DBFB'];
+                                setAvatarColor(colors[index % colors.length]);
+                              }} 
+                              className="aspect-square rounded-full overflow-hidden border-2 border-gray-200 hover:border-black hover:scale-110 transition-all"
+                            >
+                              <img src={url} alt={`Avatar ${index + 1}`} className="w-full h-full" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button onClick={goToNextStep} onKeyDown={(e) => e.key === 'Enter' && goToNextStep()} className="text-sm text-gray-400 hover:text-gray-900 font-medium transition-colors">Continue →</button>
                 </motion.div>
               )}
 
               {currentStep === 'username' && (
                 <motion.div key="username" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
                   <div>
-                    <div className="text-4xl font-light mb-6 text-gray-200">02</div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">03</div>
                     <h2 className="text-3xl mb-4 font-medium">Pick a username</h2>
                     <div className="relative">
                       <input 
                         type="text" 
                         value={formData.username} 
                         onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) })} 
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && formData.username && formData.username.length >= 3) {
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && formData.username && formData.username.length >= 3 && usernameAvailable === true) {
+                            e.preventDefault();
+                            e.stopPropagation();
                             goToNextStep();
                           }
                         }}
@@ -240,14 +471,14 @@ export default function CompleteProfile() {
                       </div>
                     )}
                   </div>
-                  <button onClick={goToNextStep} disabled={!formData.username || formData.username.length < 3} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Press Enter ↵</button>
+                  <button onClick={goToNextStep} disabled={!formData.username || formData.username.length < 3} className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 font-medium transition-colors">Press Enter ↵</button>
                 </motion.div>
               )}
 
               {currentStep === 'country' && (
                 <motion.div key="country" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
                   <div>
-                    <div className="text-4xl font-light mb-6 text-gray-200">03</div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">04</div>
                     <h2 className="text-3xl mb-4 font-medium">Where are you from?</h2>
                     {loadingCountries ? (
                       <div className="flex items-center gap-3 text-gray-400">
@@ -259,33 +490,41 @@ export default function CompleteProfile() {
                         value={formData.country} 
                         onChange={(e) => { 
                           setFormData({ ...formData, country: e.target.value }); 
-                          if (e.target.value) setTimeout(() => goToNextStep(), 100); 
                         }} 
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && formData.country) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            goToNextStep();
+                          }
+                        }}
                         className="text-2xl w-full bg-transparent border-0 border-b-2 border-gray-900 pb-2 outline-none" 
                         autoFocus
                       >
                         <option value="">Select country...</option>
                         {countries.map(c => (
-                          <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
+                          <option key={c.code} value={c.name}>{c.name}</option>
                         ))}
                       </select>
                     )}
                   </div>
-                  <button onClick={goToNextStep} disabled={!formData.country} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Select to continue</button>
+                  <button onClick={goToNextStep} disabled={!formData.country} className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 font-medium transition-colors">Press Enter ↵</button>
                 </motion.div>
               )}
 
               {currentStep === 'dob' && (
                 <motion.div key="dob" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
                   <div>
-                    <div className="text-4xl font-light mb-6 text-gray-200">04</div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">05</div>
                     <h2 className="text-3xl mb-4 font-medium">When's your birthday?</h2>
                     <input 
                       type="date" 
                       value={formData.dob} 
                       onChange={(e) => setFormData({ ...formData, dob: e.target.value })} 
-                      onKeyPress={(e) => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter' && formData.dob) {
+                          e.preventDefault();
+                          e.stopPropagation();
                           goToNextStep();
                         }
                       }}
@@ -294,21 +533,22 @@ export default function CompleteProfile() {
                       autoFocus 
                     />
                   </div>
-                  <button onClick={goToNextStep} disabled={!formData.dob} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-30">Press Enter ↵</button>
+                  <button onClick={goToNextStep} disabled={!formData.dob} className="text-sm text-gray-400 hover:text-gray-900 disabled:opacity-30 font-medium transition-colors">Press Enter ↵</button>
                 </motion.div>
               )}
 
               {currentStep === 'bio' && (
                 <motion.div key="bio" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
                   <div>
-                    <div className="text-4xl font-light mb-6 text-gray-200">05</div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">06</div>
                     <h2 className="text-3xl mb-4 font-medium">Tell us about yourself</h2>
                     <textarea 
                       value={formData.bio} 
-                      onChange={(e) => setFormData({ ...formData, bio: e.target.value.slice(0, 160) })} 
-                      onKeyPress={(e) => {
+                      onChange={(e) => setFormData({ ...formData, bio: e.target.value.slice(0, 100) })} 
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
+                          e.stopPropagation();
                           goToNextStep();
                         }
                       }}
@@ -317,21 +557,74 @@ export default function CompleteProfile() {
                       rows={3} 
                       autoFocus 
                     />
-                    <div className="text-sm text-gray-400 text-right">{formData.bio.length}/160</div>
+                    <div className="text-sm text-gray-400 text-right">{formData.bio.length}/100</div>
                   </div>
                   <div className="flex gap-4">
-                    <button onClick={() => handleSubmit()} className="text-gray-400 hover:text-gray-600">Skip →</button>
-                    <button onClick={goToNextStep} disabled={loading} className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50">{loading ? 'Creating...' : 'Finish'}</button>
+                    <button onClick={() => goToNextStep()} className="text-gray-400 hover:text-gray-900 font-medium transition-colors">Skip →</button>
+                    <button onClick={goToNextStep} disabled={loading} className="px-8 py-3 bg-black text-white rounded-full hover:shadow-lg disabled:opacity-50 transition-all font-medium">Continue</button>
                   </div>
                 </motion.div>
               )}
 
-              {currentStep === 'done' && (
-                <motion.div key="done" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                  <div className="text-6xl mb-4">✓</div>
-                  <h2 className="text-3xl mb-4 font-medium">Ready to create</h2>
-                  <p className="text-gray-500">Your profile is set up. Let's start scribbling.</p>
-                  <button onClick={() => navigate('/dashboard')} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800">Open Canvas →</button>
+              {currentStep === 'social' && (
+                <motion.div key="social" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                  <div>
+                    <div className="text-4xl font-light mb-6 text-gray-200">07</div>
+                    <h2 className="text-3xl mb-4 font-medium">Add social links</h2>
+                    <p className="text-gray-500 mb-6">Optional - Connect your social profiles</p>
+                    
+                    {!editingSocial && (
+                      <div className="space-y-3">
+                        {socialPlatforms.map((platform) => {
+                          const added = socialLinks.find(l => l.platform === platform.value);
+                          const Icon = platform.icon;
+                          return (
+                            <button
+                              key={platform.value}
+                              onClick={() => startEditingSocial(platform.value)}
+                              className="w-full px-4 py-3 bg-white hover:bg-gray-50 rounded-xl flex items-center gap-3 text-left transition-all border border-black/5 hover:border-black/20 hover:shadow-md"
+                            >
+                              <Icon className="w-5 h-5 text-gray-600" />
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-gray-900">{platform.label}</div>
+                                {added && <div className="text-xs text-gray-500 truncate">{added.url}</div>}
+                              </div>
+                              {added && <Check className="w-4 h-4 text-green-600" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {editingSocial && (
+                      <div className="p-4 bg-white rounded-xl border border-black/10 shadow-sm">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-sm font-medium">{socialPlatforms.find(p => p.value === editingSocial)?.label}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={editSocialUrl}
+                            onChange={(e) => setEditSocialUrl(e.target.value)}
+                            placeholder={socialPlatforms.find(p => p.value === editingSocial)?.placeholder}
+                            className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:border-gray-900"
+                            autoFocus
+                            onKeyDown={(e) => e.key === 'Enter' && saveSocialLink()}
+                          />
+                          <button onClick={saveSocialLink} className="px-4 py-2 bg-black text-white rounded-full hover:shadow-lg transition-all">
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button onClick={cancelEditingSocial} className="px-4 py-2 bg-white border border-black/10 rounded-full hover:border-black/20 hover:shadow-md transition-all">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-4">
+                    <button onClick={() => handleSubmit()} className="text-gray-400 hover:text-gray-900 font-medium transition-colors">Skip →</button>
+                    <button onClick={handleSubmit} disabled={loading} className="px-8 py-3 bg-black text-white rounded-full hover:shadow-lg disabled:opacity-50 transition-all font-medium">{loading ? 'Creating...' : 'Finish'}</button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -340,26 +633,75 @@ export default function CompleteProfile() {
           <motion.div 
             initial={{ opacity: 0, x: 20 }} 
             animate={{ opacity: 1, x: 0 }} 
-            whileHover={{ y: -6, boxShadow: "0 20px 40px rgba(0,0,0,0.15)" }} 
             transition={{ type: "spring", stiffness: 300, damping: 20 }} 
             className="relative group"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-black rounded-2xl transform translate-x-3 translate-y-3 transition-transform group-hover:translate-x-4 group-hover:translate-y-4" />
+            <div className="absolute inset-0 bg-black rounded-2xl transform translate-x-3 translate-y-3 transition-all group-hover:translate-x-4 group-hover:translate-y-4" />
             <div className="relative bg-white border-2 border-black rounded-2xl p-8 space-y-6 shadow-xl">
+              {socialLinks.length > 0 && (
+                <div className="absolute top-6 right-6">
+                  <div className="flex -space-x-2">
+                    {(showAllSocials ? socialLinks : socialLinks.slice(0, 3)).map((link, index) => {
+                      const platform = socialPlatforms.find(p => p.value === link.platform);
+                      const Icon = platform?.icon || Github;
+                      const getUrl = (platform: string, username: string) => {
+                        const urls: Record<string, string> = {
+                          instagram: `https://instagram.com/${username}`,
+                          github: `https://github.com/${username}`,
+                          linkedin: `https://linkedin.com/in/${username}`,
+                          discord: username, // Discord usernames don't have direct URLs
+                          snapchat: `https://snapchat.com/add/${username}`
+                        };
+                        return urls[platform] || '#';
+                      };
+                      return (
+                        <motion.a
+                          key={index}
+                          href={getUrl(link.platform, link.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          whileHover={{ scale: 1.2, rotate: 5, zIndex: 10 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="w-9 h-9 flex items-center justify-center rounded-full border-2 border-white bg-gray-100 hover:bg-white transition-all cursor-pointer shadow-sm"
+                          style={{ zIndex: socialLinks.length - index }}
+                        >
+                          <Icon className="w-5 h-5 text-gray-600" />
+                        </motion.a>
+                      );
+                    })}
+                    {socialLinks.length > 3 && (
+                      <motion.div
+                        whileHover={{ scale: 1.2, zIndex: 10 }}
+                        onClick={() => setShowAllSocials(!showAllSocials)}
+                        className="w-9 h-9 flex items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white text-xs font-bold cursor-pointer shadow-sm"
+                      >
+                        {showAllSocials ? '−' : `+${socialLinks.length - 3}`}
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-4">
                 <motion.div 
-                  whileHover={{ scale: 1.15, rotate: [0, -10, 10, -10, 0] }} 
-                  transition={{ duration: 0.6 }} 
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold text-white shadow-lg ring-2 ring-white cursor-pointer" 
-                  style={{ backgroundColor: formData.color }}
+                  whileHover={{ scale: 1.1, rotate: [0, -5, 5, -5, 0] }}
+                  transition={{ duration: 0.5 }}
+                  className="w-24 h-24 rounded-full overflow-hidden border-4 shadow-lg flex-shrink-0 cursor-pointer"
+                  style={{ borderColor: avatar ? avatarColor : '#e5e7eb' }}
                 >
-                  {initials || '?'}
+                  {avatar ? (
+                    <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-white" style={{ backgroundColor: formData.color }}>
+                      {initials || '?'}
+                    </div>
+                  )}
                 </motion.div>
                 <div className="flex-1">
                   <motion.div 
                     initial={{ opacity: 0 }} 
                     animate={{ opacity: 1 }} 
-                    className="font-bold text-2xl mb-1"
+                    whileHover={{ x: 5 }}
+                    className="font-bold text-2xl mb-1 cursor-pointer break-words"
                   >
                     {formData.name || 'Your Name'}
                   </motion.div>
@@ -367,7 +709,8 @@ export default function CompleteProfile() {
                     initial={{ opacity: 0 }} 
                     animate={{ opacity: 1 }} 
                     transition={{ delay: 0.1 }} 
-                    className="text-gray-500 text-base mb-2"
+                    whileHover={{ x: 5 }}
+                    className="text-gray-500 text-base mb-2 cursor-pointer break-all"
                   >
                     @{formData.username || 'username'}
                   </motion.div>
@@ -375,10 +718,13 @@ export default function CompleteProfile() {
                     <motion.div 
                       initial={{ scale: 0 }} 
                       animate={{ scale: 1 }} 
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-full text-sm text-gray-700 font-medium"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm text-gray-700 font-medium cursor-pointer transition-colors"
+                      style={{ backgroundColor: avatar ? `${avatarColor}15` : '#f3f4f6' }}
                     >
-                      <span>{selectedCountry.flag}</span>
-                      <span>{selectedCountry.name}</span>
+                      <img src={selectedCountry.flag} alt={selectedCountry.code} className="w-5 h-4 object-cover rounded" />
+                      <span>{selectedCountry.code}</span>
                     </motion.div>
                   )}
                 </div>
@@ -388,27 +734,77 @@ export default function CompleteProfile() {
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }} 
-                  className="p-4 bg-gray-50 rounded-xl border-l-4 border-black"
+                  whileHover={{ scale: 1.02, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                  className="p-4 bg-gray-50 rounded-xl cursor-pointer transition-all"
+                  style={{ borderLeft: avatar ? `4px solid ${avatarColor}` : '4px solid #000' }}
                 >
-                  <p className="text-sm text-gray-700 leading-relaxed">{formData.bio}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words">{formData.bio}</p>
                 </motion.div>
               )}
 
               <div className="flex items-center justify-between text-xs pt-4 border-t-2 border-gray-100">
-                <div className="flex items-center gap-2">
+                <motion.div 
+                  className="flex items-center gap-2"
+                  whileHover={{ scale: 1.05 }}
+                >
                   <motion.div 
-                    animate={{ scale: [1, 1.2, 1] }} 
+                    animate={{ scale: [1, 1.3, 1] }} 
                     transition={{ duration: 2, repeat: Infinity }} 
-                    className="w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-pink-500 rounded-full shadow-sm" 
+                    className="w-2.5 h-2.5 rounded-full shadow-sm" 
+                    style={{ background: avatar ? avatarColor : '#000' }}
                   />
-                  <span className="font-bold text-gray-800 tracking-wide">MEMBER</span>
-                </div>
-                <span className="text-gray-500 font-medium">Joined {joinDate}</span>
+                  <span className="font-bold text-gray-800 tracking-wide cursor-pointer">MEMBER</span>
+                </motion.div>
+                <motion.span 
+                  whileHover={{ scale: 1.05 }}
+                  className="text-gray-500 font-medium cursor-pointer"
+                >
+                  Joined {joinDate}
+                </motion.span>
               </div>
             </div>
           </motion.div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmation && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+            onClick={() => setShowConfirmation(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} 
+              animate={{ scale: 1, y: 0 }} 
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border-2 border-black"
+            >
+              <h3 className="text-2xl font-bold mb-2">Create your profile?</h3>
+              <p className="text-gray-500 text-sm mb-8">You can always edit your profile later from settings.</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowConfirmation(false)} 
+                  className="flex-1 px-6 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-full hover:border-gray-300 transition-all font-medium"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmAndCreate} 
+                  disabled={loading}
+                  className="flex-1 px-6 py-3 bg-black text-white rounded-full hover:shadow-lg transition-all font-medium disabled:opacity-50"
+                >
+                  {loading ? 'Creating...' : 'Create Profile'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

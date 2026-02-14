@@ -3,15 +3,54 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 12px; /* Base size matching 75% zoom at 1920px */
+  }
+  
+  @media (min-width: 1440px) {
+    html {
+      font-size: 14px;
+    }
+  }
+  
+  @media (min-width: 1920px) {
+    html {
+      font-size: 16px;
+    }
+  }
+  
+  @media (max-width: 1024px) {
+    html {
+      font-size: 11px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    html {
+      font-size: 10px;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    html {
+      font-size: 9px;
+    }
+  }
+  
   body {
     @apply bg-[#fafaf9] text-gray-900;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer utilities {
   .font-display {
-    font-family: 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif !important;
     font-weight: 600;
     letter-spacing: -0.02em;
   }
