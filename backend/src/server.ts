@@ -12,6 +12,7 @@ import { userRoutes } from "./routes/user.routes";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import { JsonWebTokenError, TokenExpiredError } from "jsonwebtoken";
+import { serializerCompiler, validatorCompiler } from "fastify-type-provider-zod";
 
 async function buildServer() {
   const server = Fastify({
@@ -21,6 +22,10 @@ async function buildServer() {
 
   // Register all shared plugins (cors, cookie, helmet, etc.)
   await registerPlugins(server);
+
+  // Set validator and serializer compiler for Zod
+  server.setValidatorCompiler(validatorCompiler);
+  server.setSerializerCompiler(serializerCompiler);
 
   // Basic routes
   server.get("/health", async () => {

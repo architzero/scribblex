@@ -3,9 +3,6 @@ import { Server as SocketIOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import prisma from "../prisma";
-import { crdtManager } from "../services/crdt.service";
-import { Node, NodeUpdate } from "../types/crdt.types";
-import * as Y from 'yjs';
 
 interface RoomUser {
   userId: string;
@@ -114,9 +111,6 @@ export async function registerWebsocket(app: FastifyInstance) {
           return;
         }
 
-        // Initialize CRDT document for room (loads from DB if exists)
-        await crdtManager.getOrCreateRoom(roomId);
-
         // Join socket room
         socket.join(roomId);
         socket.data.currentRoom = roomId;
@@ -150,10 +144,6 @@ export async function registerWebsocket(app: FastifyInstance) {
           avatarUrl: user.avatarUrl,
           joinedAt: new Date(),
         });
-
-        // Send CRDT state to new user
-        const state = crdtManager.getState(roomId);
-        socket.emit('crdt:sync', Array.from(state));
 
         // Send drawing state to new user (load from DB)
         const roomData = await prisma.room.findUnique({
@@ -198,43 +188,6 @@ export async function registerWebsocket(app: FastifyInstance) {
       socket.to(roomId).emit('room:user-stop-typing', {
         userId: user.id,
       });
-    });
-
-    // CRDT: Add node
-    socket.on('node:add', (data: { roomId: string; node: Node }) => {
-      const { roomId, node } = data;
-      if (socket.data.currentRoom !== roomId) return;
-
-      crdtManager.addNode(roomId, node);
-      socket.to(roomId).emit('node:added', node);
-    });
-
-    // CRDT: Update node
-    socket.on('node:update', (data: { roomId: string; update: NodeUpdate }) => {
-      const { roomId, update } = data;
-      if (socket.data.currentRoom !== roomId) return;
-
-      crdtManager.updateNode(roomId, update.id, update);
-      socket.to(roomId).emit('node:updated', update);
-    });
-
-    // CRDT: Delete node
-    socket.on('node:delete', (data: { roomId: string; nodeId: string }) => {
-      const { roomId, nodeId } = data;
-      if (socket.data.currentRoom !== roomId) return;
-
-      crdtManager.deleteNode(roomId, nodeId);
-      socket.to(roomId).emit('node:deleted', { nodeId });
-    });
-
-    // CRDT: Sync update
-    socket.on('crdt:update', (data: { roomId: string; update: number[] }) => {
-      const { roomId, update } = data;
-      if (socket.data.currentRoom !== roomId) return;
-
-      const updateArray = new Uint8Array(update);
-      crdtManager.applyUpdate(roomId, updateArray);
-      socket.to(roomId).emit('crdt:update', update);
     });
 
     // Cursor: Move
@@ -285,6 +238,33 @@ export async function registerWebsocket(app: FastifyInstance) {
 
       // Broadcast to others
       socket.to(roomId).emit('drawing:clear');
+    });
+
+    // Element: Create
+    socket.on('element:create', (data: { roomId: string; element: any }) => {
+      const { roomId, element } = data;
+      if (socket.data.currentRoom !== roomId) return;
+
+      // Broadcast to others
+      socket.to(roomId).emit('element:created', element);
+    });
+
+    // Element: Update
+    socket.on('element:update', (data: { roomId: string; elementId: string; updates: any }) => {
+      const { roomId, elementId, updates } = data;
+      if (socket.data.currentRoom !== roomId) return;
+
+      // Broadcast to others
+      socket.to(roomId).emit('element:updated', { elementId, updates });
+    });
+
+    // Element: Delete
+    socket.on('element:delete', (data: { roomId: string; elementId: string }) => {
+      const { roomId, elementId } = data;
+      if (socket.data.currentRoom !== roomId) return;
+
+      // Broadcast to others
+      socket.to(roomId).emit('element:deleted', { elementId });
     });
   });
 

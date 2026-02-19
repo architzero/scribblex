@@ -1,4 +1,6 @@
 import { FastifyInstance } from "fastify";
+import { ZodTypeProvider } from "fastify-type-provider-zod";
+import z from "zod";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import prisma from "../prisma";
@@ -10,18 +12,26 @@ import { sendOTPEmail, sendPasswordResetEmail } from "../utils/email";
 import { env } from "../config/env";
 
 export async function authRoutes(app: FastifyInstance) {
+  const zApp = app.withTypeProvider<ZodTypeProvider>();
 
   // =========================
   // EMAIL/PASSWORD SIGNUP
   // =========================
-  app.post("/auth/signup", {
+  zApp.post("/auth/signup", {
+    schema: {
+      body: z.object({
+        email: z.string().email(),
+        password: z.string().min(6),
+        name: z.string().min(1)
+      })
+    },
     config: {
       rateLimit: {
         max: 5,
         timeWindow: '15 minutes'
       }
     }
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { email, password, name } = request.body;
     const ipAddress = request.ip;
 
@@ -31,14 +41,6 @@ export async function authRoutes(app: FastifyInstance) {
         success: false,
         message: `Too many attempts. Try again in ${lockout.minutesLeft} minutes.`
       });
-    }
-
-    if (!email || !password || !name) {
-      return reply.status(400).send({ success: false, message: "Email, password, and name are required" });
-    }
-
-    if (password.length < 6) {
-      return reply.status(400).send({ success: false, message: "Password must be at least 6 characters" });
     }
 
     try {
@@ -83,20 +85,22 @@ export async function authRoutes(app: FastifyInstance) {
   // =========================
   // VERIFY OTP
   // =========================
-  app.post("/auth/verify-otp", {
+  zApp.post("/auth/verify-otp", {
+    schema: {
+      body: z.object({
+        email: z.string().email(),
+        otp: z.string().length(6)
+      })
+    },
     config: {
       rateLimit: {
         max: 10,
         timeWindow: '15 minutes'
       }
     }
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { email, otp } = request.body;
     const ipAddress = request.ip;
-
-    if (!email || !otp) {
-      return reply.status(400).send({ success: false, message: "Email and OTP are required" });
-    }
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
@@ -145,7 +149,7 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
 
-      await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
+      if (redis) await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
         userId: user.id,
         email: user.email,
         username: user.username,
@@ -184,19 +188,20 @@ export async function authRoutes(app: FastifyInstance) {
   // =========================
   // RESEND OTP
   // =========================
-  app.post("/auth/resend-otp", {
+  zApp.post("/auth/resend-otp", {
+    schema: {
+      body: z.object({
+        email: z.string().email()
+      })
+    },
     config: {
       rateLimit: {
         max: 3,
         timeWindow: '15 minutes'
       }
     }
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { email } = request.body;
-
-    if (!email) {
-      return reply.status(400).send({ success: false, message: "Email is required" });
-    }
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
@@ -230,14 +235,20 @@ export async function authRoutes(app: FastifyInstance) {
   // =========================
   // EMAIL/PASSWORD LOGIN
   // =========================
-  app.post("/auth/login", {
+  zApp.post("/auth/login", {
+    schema: {
+      body: z.object({
+        email: z.string().email(),
+        password: z.string()
+      })
+    },
     config: {
       rateLimit: {
         max: 10,
         timeWindow: '15 minutes'
       }
     }
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { email, password } = request.body;
     const ipAddress = request.ip;
 
@@ -247,10 +258,6 @@ export async function authRoutes(app: FastifyInstance) {
         success: false,
         message: `Too many attempts. Try again in ${lockout.minutesLeft} minutes.`
       });
-    }
-
-    if (!email || !password) {
-      return reply.status(400).send({ success: false, message: "Email and password are required" });
     }
 
     try {
@@ -292,7 +299,7 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
 
-      await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
+      if (redis) await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
         userId: user.id,
         email: user.email,
         username: user.username,
@@ -333,19 +340,20 @@ export async function authRoutes(app: FastifyInstance) {
   // =========================
   // FORGOT PASSWORD
   // =========================
-  app.post("/auth/forgot-password", {
+  zApp.post("/auth/forgot-password", {
+    schema: {
+      body: z.object({
+        email: z.string().email()
+      })
+    },
     config: {
       rateLimit: {
         max: 3,
         timeWindow: '15 minutes'
       }
     }
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { email } = request.body;
-
-    if (!email) {
-      return reply.status(400).send({ success: false, message: "Email is required" });
-    }
 
     try {
       const user = await prisma.user.findUnique({ where: { email } });
@@ -376,23 +384,21 @@ export async function authRoutes(app: FastifyInstance) {
   // =========================
   // RESET PASSWORD
   // =========================
-  app.post("/auth/reset-password", {
+  zApp.post("/auth/reset-password", {
+    schema: {
+      body: z.object({
+        token: z.string(),
+        password: z.string().min(6)
+      })
+    },
     config: {
       rateLimit: {
         max: 5,
         timeWindow: '15 minutes'
       }
     }
-  }, async (request: any, reply) => {
+  }, async (request, reply) => {
     const { token, password } = request.body;
-
-    if (!token || !password) {
-      return reply.status(400).send({ success: false, message: "Token and password are required" });
-    }
-
-    if (password.length < 6) {
-      return reply.status(400).send({ success: false, message: "Password must be at least 6 characters" });
-    }
 
     try {
       const user = await prisma.user.findFirst({
@@ -455,11 +461,11 @@ export async function authRoutes(app: FastifyInstance) {
 
     try {
       const { token } = await (app as any).googleOAuth2.getAccessTokenFromAuthorizationCodeFlow(request);
-      
+
       const userInfoResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
         headers: { Authorization: `Bearer ${token.access_token}` },
       });
-      
+
       const googleUser: any = await userInfoResponse.json();
 
       let user = await prisma.user.findUnique({ where: { googleId: googleUser.id } });
@@ -507,7 +513,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       // Store session in Redis (fast lookup)
-      await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
+      if (redis) await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
         userId: user.id,
         email: user.email,
         username: user.username,
@@ -576,7 +582,7 @@ export async function authRoutes(app: FastifyInstance) {
     const hashedSession = hashToken(sessionToken);
 
     // Check Redis first (fast)
-    const cachedSession = await redis.get(`session:${hashedSession}`);
+    const cachedSession = redis ? await redis.get(`session:${hashedSession}`) : null;
 
     if (!cachedSession) {
       // Check database
@@ -595,7 +601,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(401).send({ success: false, message: "User not found" });
       }
 
-      await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
+      if (redis) await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
         userId: user.id,
         email: user.email,
         username: user.username,
@@ -634,7 +640,7 @@ export async function authRoutes(app: FastifyInstance) {
       const hashedSession = hashToken(sessionToken);
 
       // Delete from Redis
-      await redis.del(`session:${hashedSession}`);
+      if (redis) await redis.del(`session:${hashedSession}`);
 
       // Delete from database
       await prisma.session.deleteMany({ where: { sessionToken: hashedSession } });
@@ -646,7 +652,7 @@ export async function authRoutes(app: FastifyInstance) {
           const jwt = require("jsonwebtoken");
           const decoded: any = jwt.verify(token, env.JWT_SECRET);
           await logAudit("LOGOUT", request, decoded.userId);
-        } catch {}
+        } catch { }
       }
     }
 
@@ -766,7 +772,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       // Delete from Redis
-      await redis.del(`session:${session.sessionToken}`);
+      if (redis) await redis.del(`session:${session.sessionToken}`);
 
       // Delete from database
       await prisma.session.delete({ where: { id: session.id } });
@@ -803,21 +809,21 @@ export async function authRoutes(app: FastifyInstance) {
 
     try {
       const { token } = await (app as any).githubOAuth2.getAccessTokenFromAuthorizationCodeFlow(request);
-      
+
       const userInfoResponse = await fetch("https://api.github.com/user", {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token.access_token}`,
           "User-Agent": "ScribbleX"
         },
       });
-      
+
       const githubUser: any = await userInfoResponse.json();
 
       // Get email if not public
       let email = githubUser.email;
       if (!email) {
         const emailResponse = await fetch("https://api.github.com/user/emails", {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token.access_token}`,
             "User-Agent": "ScribbleX"
           },
@@ -868,7 +874,7 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
 
-      await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
+      if (redis) await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
         userId: user.id,
         email: user.email,
         username: user.username,
@@ -935,11 +941,11 @@ export async function authRoutes(app: FastifyInstance) {
 
     try {
       const { token } = await (app as any).appleOAuth2.getAccessTokenFromAuthorizationCodeFlow(request);
-      
+
       // Decode Apple ID token
       const jwt = require("jsonwebtoken");
       const decoded: any = jwt.decode(token.id_token);
-      
+
       const appleUser = {
         id: decoded.sub,
         email: decoded.email,
@@ -987,7 +993,7 @@ export async function authRoutes(app: FastifyInstance) {
         },
       });
 
-      await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
+      if (redis) await redis.setex(`session:${hashedSession}`, 604800, JSON.stringify({
         userId: user.id,
         email: user.email,
         username: user.username,

@@ -1,434 +1,584 @@
-PROJECT TITLE
-ScribbleX — AI-Structured Real-Time Collaborative Idea Graph
-1. FINAL PROJECT DESCRIPTION
-Overview
+Working Tagline
+“Where ideas play together.”
+One-Line Description
+An infinite collaborative canvas with spatial audio and public rooms — designed to make online interaction feel alive, social, and creative.
 
-ScribbleX is a real-time collaborative platform built around an infinite, node-based idea graph canvas. It enables multiple users to think, brainstorm, and solve problems visually in a shared space while an AI intelligence layer organizes ideas through semantic clustering and structured summarization.
+1. Product Vision
+Most digital collaboration tools are:
+Static
 
-Unlike chat-based systems that produce linear message streams, ScribbleX structures collective thinking spatially. Ideas are represented as interconnected nodes, forming a dynamic graph that evolves over time. The AI layer assists by identifying semantic similarity between ideas, suggesting clusters, and generating structured summaries.
 
-The platform is designed to prove one core hypothesis:
+Corporate
 
-AI-assisted real-time idea graphs improve collaborative thinking compared to linear communication tools.
 
-Core Value Proposition
+Meeting-driven
 
-Escape linear chat constraints.
 
-Visualize thought structures.
+Ephemeral
 
-Organize chaotic brainstorming automatically.
 
-Convert visual thinking into structured output.
+This product reimagines collaboration as:
+Spatial
 
-Preserve the evolution of ideas over time.
 
-Target Use Cases
+Persistent
 
-Startup brainstorming sessions
 
-Product requirement mapping
+Social
 
-Academic group discussions
 
-Research collaboration
+Playful
 
-Strategy planning
 
-Hackathon ideation
+Instead of joining a video call, users enter a shared creative space.
+Instead of meetings ending, rooms evolve.
+Instead of isolated whiteboards, canvases become discoverable communities.
 
-2. SYSTEM ARCHITECTURE & DATABASE DESIGN
-High-Level Architecture
+2. Core Identity
+The product rests on three non-negotiable pillars:
+1️⃣ Spatial Audio Presence
+Users hear each other based on distance — creating natural conversational clusters.
+2️⃣ Living Rooms
+Rooms don’t disappear after sessions — they evolve, archive, and grow.
+3️⃣ Public Discovery
+Users can browse and spectate active canvases like social media.
+This is not a productivity tool first.
+ It is a social creative environment.
 
-Frontend:
+3. MVP (Phase 1 Launch)
+The MVP must feel:
+Alive
 
-React-based infinite canvas
 
-CRDT-based collaborative state (Yjs or Automerge)
+Intuitive
 
-WebSocket connection to backend
 
-Backend:
+Social
 
-Node.js / FastAPI API server
 
-PostgreSQL (relational data)
+Smooth
 
-pgvector extension for embedding storage
 
-Redis (optional, for presence and pub/sub)
+A. Infinite Canvas Core
+Infinite pan and zoom
 
-AI Microservice:
 
-Sentence-BERT (or similar embedding model)
+Momentum-based object physics (throw and drag naturally)
 
-Clustering algorithm (DBSCAN or K-Means)
 
-Summarization model
+Real-time multiplayer sync (<100ms target latency)
 
-Core Architectural Decisions
 
-Relational database for metadata.
+Real-time cursors with names + avatars
 
-Vector storage inside PostgreSQL using pgvector.
 
-CRDT for conflict-free real-time editing.
+Drawing tools:
 
-AI is suggestive, not authoritative.
 
-Clustering is asynchronous and batched.
+Pen
 
-DATABASE DESIGN (V1)
-1. Users
 
-users
+Shapes
 
-id (PK)
 
-name
+Text
 
-email
 
-password_hash
+Sticky notes
 
-created_at
 
-last_active
+Image upload
 
-2. Rooms
 
-rooms
+Undo/redo with time history slider
 
-id (PK)
 
-title
+Mobile + desktop optimized
 
-description
 
-visibility (public/private)
+No advanced physics modes yet. Just smooth, satisfying movement.
 
-created_by (FK → users.id)
+B. Spatial Audio (Core Differentiator)
+WebRTC-based proximity audio:
+Distance-based volume attenuation
 
-created_at
 
-is_active
+Avatar glow when speaking
 
-3. Room Participants
 
-room_participants
+Subtle ripple animation while talking
 
-room_id (FK → rooms.id)
 
-user_id (FK → users.id)
+Double-tap avatar to mute
 
-role (host/participant)
 
-joined_at
+“Party Mode” toggle (everyone hears everyone equally)
 
-Composite Primary Key: (room_id, user_id)
 
-4. Nodes
+No music zones in MVP.
+ No complex whisper/broadcast logic initially.
+Polish > complexity.
 
-nodes
+C. Rooms System (Clean Architecture)
+Room Types
+1. Community Rooms (Platform-Owned)
+Always available
 
-id (PK)
 
-room_id (FK → rooms.id)
+Themed (e.g., Daily Sketch, Brainstorm Hub)
 
-created_by (FK → users.id)
 
-content (text)
+Auto-reset every 24 hours
 
-tag_type (nullable)
 
-x_position
+Archived automatically
 
-y_position
 
-vote_count
+Purpose: Keep platform alive.
 
-embedding VECTOR(384 or 768) ← pgvector
+2. User Rooms (Host-Created)
+When creating a room, host selects:
+Ephemeral Room
 
-cluster_id (nullable FK → clusters.id)
 
-created_at
+Auto-clears after selected time
 
-updated_at
 
-5. Edges
+Persistent Room
 
-edges
 
-id (PK)
+Saved indefinitely
 
-room_id (FK → rooms.id)
 
-from_node_id (FK → nodes.id)
+Can archive manually
 
-to_node_id (FK → nodes.id)
 
-6. Clusters
+Rooms never feel cluttered because content can expire or archive.
 
-clusters
+D. Social Discovery
+Explore Page includes:
+🔥 Live Now (real-time activity count)
 
-id (PK)
 
-room_id (FK → rooms.id)
+🏷️ Interest tags
 
-label
 
-summary
+Spectator mode before joining
 
-created_at
 
-7. Snapshots
+Follow creators
 
-snapshots
 
-id (PK)
+Follow rooms
 
-room_id (FK → rooms.id)
 
-summary
+Rooms display:
+Live participant count
 
-created_at
 
-Vector Search Setup
+Activity pulse animation
 
-Enable pgvector:
 
-CREATE EXTENSION vector;
 
-Embedding column:
+E. Sketch Rush (Single Game Mode)
+A simple, polished game:
+Everyone receives same prompt
 
-embedding VECTOR(384);
 
-Index:
+60-second timer
 
-CREATE INDEX ON nodes USING ivfflat (embedding vector_cosine_ops);
 
-This enables fast semantic similarity search.
+Anonymous voting
 
-REAL-TIME COLLABORATION DESIGN
 
-CRDT Layer:
+Winner receives session crown icon
 
-Shared document per room.
 
-Nodes and edges stored in CRDT state.
+Auto time-lapse generated
 
-Server acts as awareness + persistence layer.
 
-On interval, CRDT state serialized into database.
+No AI judging.
+ No complex modes.
+ One game done extremely well.
 
-This prevents:
+F. Clips Library
+Users can:
+Select any element
 
-Race conditions
 
-Node overwrite conflicts
+Save to personal “Clips”
 
-Edge duplication issues
 
-AI PIPELINE (V1)
+Reuse in other rooms
 
-Trigger conditions:
 
-Node count > threshold
+Export as image
 
-Host clicks “Analyze”
 
-Time interval reached
+Save area snapshot
 
-Steps:
 
-Fetch node embeddings from pgvector.
+This supports the “Living Rooms” concept without permanent clutter.
 
-Perform clustering (approximate nearest neighbor + DBSCAN).
+G. Memory Snapshots
+Save full canvas snapshot
 
-Create cluster entries.
 
-Assign cluster_id to nodes.
+Time-lapse export (30s / 60s)
 
-Generate cluster label + summary.
 
-Return cluster suggestions to frontend.
+Shareable link
 
-Frontend displays ghost bounding boxes.
 
-Host confirms application.
+Rooms evolve but moments are preserved.
 
-AI never force-moves nodes automatically.
+🌱 4. Phase 2 – Engagement Expansion
+After MVP gains traction:
+A. Light AI Organization
+“Smart Suggest” button:
+Group by color
 
-VERSION 1.0 (STRICT FOCUS)
-Objective:
 
-Prove that multiplayer AI-structured idea graphs improve collaboration.
+Cluster by text similarity
 
-V1 Feature Set
 
-Authentication
+Organize by timeline
 
-Room creation via shareable link
 
-Multiplayer infinite canvas
+Preview before applying.
+ One-click undo.
+No automatic chaos meter yet.
 
-Node creation
+B. Scrapbook Mode
+Upload photo as canvas background
 
-Dragging nodes
 
-Manual connections (edges)
+Collaborative doodling
 
-Node voting
 
-CRDT-based sync
+Reaction bubbles on photos
 
-Embedding generation
 
-Suggestive clustering
+“Memory Wall” inside profile
 
-Cluster summarization
 
-Timeline playback (basic)
 
-Graph-to-linear export (AI summary to structured text)
+C. Collaboration Circles
+Private mini-communities:
+5–20 members
 
-V1 Exclusions
 
-Social feed
+Shared template library
 
-Follow system
 
-Public discovery
+Private rooms
 
-Skill-based matching
 
-Persistent communities
+Visual equivalent of small Discord servers.
 
-Reputation scoring
+D. Portal System
+Create shortcuts between canvas regions:
+Mark A and B
 
-Complex moderation tools
 
-Keep it lean.
+Swirl animation
 
-VERSION 2.0 (PLATFORM EXPANSION)
 
-After V1 stability.
+Two-way jump
 
-1. Social Graph Layer
 
-Friend requests
+Label portals
 
-User profiles
 
-Room invites
+Useful for large canvases and guided tours.
 
-Activity presence
+🧠 5. Phase 3 – Intelligence & Creative Depth
+A. Smart Meeting Mode
+When enabled:
+Audio transcription
 
-2. Skill-Based Matching System
 
-New Tables:
+AI-detected:
 
-skills
 
-id (PK)
+Decisions
 
-name
 
-user_skills
+Action items
 
-user_id
 
-skill_id
+Questions
 
-proficiency
 
-Matching Algorithm:
+Highlighted zones on canvas
 
-MatchScore =
-Skill overlap +
-Topic similarity (embedding comparison) +
-Participation similarity
 
-Use Cases:
+Search by speaker or topic
 
-Suggest collaborators
 
-Suggest rooms
+Export summary document
 
-Balance team composition
 
-3. Community Mode
+This becomes your “Why not Zoom?” answer.
 
-Rooms can be stabilized.
+B. Guided Presentation Mode
+Record navigation path
 
-Add:
 
-room_followers
+Add voiceover
 
-room_id
 
-user_id
+Zoom-based storytelling
 
-Persistent idea graphs.
-Snapshot history.
-Cluster indexing.
 
-4. Advanced AI Features
+Interactive Q&A mode
 
-Conflict detection
 
-Node similarity merge suggestions
+Non-linear flow
 
-Contribution analysis
 
-Smart summarization over time
+Better than slide decks because canvas is spatial.
 
-Auto-topic extraction
+C. Advanced Search
+Search by:
+Keywords
 
-5. Advanced UX
 
-Smooth graph animation
+Creator
 
-Role-based permissions
 
-Moderation tools
+Date range
 
-Performance optimizations
 
-DEVELOPMENT PHASE STRATEGY
+Color
 
-Month 1:
 
-CRDT + Canvas
+Shape
 
-Real-time stable sync
 
-Node & edge management
+Natural language queries
 
-Month 2:
 
-Embedding pipeline
+Search results:
+Canvas highlights
 
-Clustering engine
 
-Ghost clustering UX
+Mini-map pins
 
-Month 3:
 
-Playback
+Jump navigation
 
-Export
 
-Performance tuning
 
-Testing & polish
+D. Invisible Ink Mode
+Hidden content mechanics:
+Hover reveals
 
-FINAL POSITIONING
 
-V1 is:
+Click to unlock
 
-An AI-assisted multiplayer idea graph engine.
 
-V2 becomes:
+Timed release
 
-A social collaborative intelligence platform
+
+Used for games, secrets, surprises.
+
+E. Night Mode / Dream Mode
+Opt-in late night theme:
+Soft ambient UI
+
+
+No notifications
+
+
+“Drop a dream” quick capture
+
+
+Morning AI synthesis summary
+
+
+Designed for night owls.
+
+F. Canvas DNA Matching (Experimental)
+Analyze user behavior:
+Tool usage
+
+
+Color patterns
+
+
+Collaboration style
+
+
+Suggest compatible collaborators.
+Not launch-critical.
+
+🏘️ 6. Living Rooms Model (Final Explanation)
+Rooms are:
+Not static boards.
+ Not disposable meetings.
+They are:
+Persistent spaces with evolving states.
+Structure:
+Active State
+
+
+Archived State
+
+
+Snapshot History
+
+
+Users can:
+Clear canvas
+
+
+Archive session
+
+
+Restore older version
+
+
+Rooms feel alive, not cluttered.
+
+📈 7. Retention & Growth Loops
+Retention mechanisms:
+Daily themed public rooms
+
+
+Time-lapse sharing on social media
+
+
+Follow favorite creators
+
+
+Collaboration circles
+
+
+Weekly trending rooms highlight
+
+
+Growth vector:
+Public room discovery → Spectate → Participate → Follow → Return.
+
+🔐 8. Privacy & Safety Model
+Visibility Levels:
+Public
+
+
+Unlisted
+
+
+Private (invite only)
+
+
+Safe Mode (Under 18):
+Profanity filter
+
+
+Image moderation
+
+
+Restricted DMs
+
+
+Optional time limits
+
+
+Universal:
+Report system
+
+
+Block users
+
+
+Strike system
+
+
+Admin review
+
+
+Session management
+
+
+Moderation AI introduced gradually.
+
+🏗️ 9. Technical Architecture
+Frontend
+React + TypeScript
+
+
+Canvas rendering: Konva.js (better abstraction) or Fabric.js
+
+
+Zustand (lighter than Redux)
+
+
+WebRTC for audio
+
+
+WebSockets (Socket.io or Ably)
+
+
+Backend
+Node.js + Fastify
+
+
+PostgreSQL (primary storage)
+
+
+Redis (real-time cache)
+
+
+S3 / Cloudflare R2 (file storage)
+
+
+Infrastructure
+Vercel (frontend)
+
+
+Railway / Render (backend)
+
+
+Cloudflare CDN
+
+
+Sentry (monitoring)
+
+
+PostHog (product analytics)
+
+
+Performance is critical:
+Delta-based canvas updates
+
+
+CRDT or operational transform for conflict resolution
+
+
+Audio latency optimization
+
+
+
+10. Final Positioning
+Primary Target:
+ Ages 16–30
+ Friend groups
+ Creative hangouts
+ Online communities
+Secondary:
+ Small teams
+ Creators
+ Workshops
+Core Differentiation:
+Spatial audio makes it feel real.
+
+
+Public rooms make it social.
+
+
+Persistent canvases make it meaningful.
+
+
+
+

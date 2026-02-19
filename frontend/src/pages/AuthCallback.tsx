@@ -34,7 +34,7 @@ export default function AuthCallback() {
             if (!data.user.profileCompleted) {
               navigate('/complete-profile');
             } else {
-              navigate('/home');
+              navigate('/dashboard');
             }
           } else {
             navigate('/');

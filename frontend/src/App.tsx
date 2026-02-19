@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'sonner';
@@ -13,7 +13,10 @@ import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import VerifyOTP from './pages/VerifyOTP';
 import RoomTest from './pages/RoomTest';
-import Room from './pages/Room';
+
+// Lazy load Room to prevent Konva-related crashes from breaking the entire app
+const Room = React.lazy(() => import('./pages/Room'));
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -77,7 +80,11 @@ function App() {
             path="/room/:id"
             element={
               <ProtectedRoute>
-                <Room />
+                <ErrorBoundary>
+                  <Suspense fallback={<div>Loading Room...</div>}>
+                    <Room />
+                  </Suspense>
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
 
 export interface DrawingStroke {
@@ -42,37 +42,44 @@ export function useDrawing(socket: Socket | null, roomId: string) {
     };
   }, [socket]);
 
-  const startDrawing = (x: number, y: number) => {
+  const startDrawing = (point: { x: number; y: number }) => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const newStroke: DrawingStroke = {
       id: `stroke-${Date.now()}-${Math.random()}`,
-      points: [{ x, y }],
+      points: [point],
       color,
       width,
       createdBy: user.id || 'unknown',
       createdAt: Date.now(),
     };
+    // Initialize with two points so it's visible even as a dot
+    newStroke.points.push(point);
     setCurrentStroke(newStroke);
     setIsDrawing(true);
   };
 
-  const continueDrawing = (x: number, y: number) => {
+  const continueDrawing = (point: { x: number; y: number }) => {
     if (!isDrawing || !currentStroke) return;
+
+    // Add point to current stroke
+    const newPoints = [...currentStroke.points, point];
+
     setCurrentStroke({
       ...currentStroke,
-      points: [...currentStroke.points, { x, y }],
+      points: newPoints,
     });
   };
 
   const endDrawing = () => {
     if (!currentStroke || !socket) return;
-    
-    // Only save strokes with at least 2 points
+
+    // Broadcast the finished stroke
     if (currentStroke.points.length > 1) {
       socket.emit('drawing:stroke', { roomId, stroke: currentStroke });
+      // Verify we don't duplicate via socket event
       setStrokes((prev) => [...prev, currentStroke]);
     }
-    
+
     setCurrentStroke(null);
     setIsDrawing(false);
   };
